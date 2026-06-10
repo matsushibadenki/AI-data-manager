@@ -1,0 +1,8 @@
+@charset "utf-8";
+
+/*--------------------------------------------------------------
+  管理者以外コントロールパネルデザイン変更用 
+--------------------------------------------------------------*/
+#menu-posts,#menu-comments,#menu-tools,#menu-settings,#wp-admin-bar-comments,#wp-admin-bar-new-content {
+    display: none;
+}

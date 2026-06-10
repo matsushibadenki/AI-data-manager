@@ -1,0 +1,23 @@
+/* ============================================================
+ * File: /assets/css/base/font-css.css
+ * Name: font-css.css
+ * Description: アイコンフォント・特殊テキストのスタイル定義
+ * ============================================================ */
+
+.material-symbols-outlined {
+  font-size: 1.5rem;
+  line-height: 1.5rem;
+  vertical-align: middle;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 300,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+.material-text {
+  font-size: 1.2rem;
+  line-height: 1.2rem;
+  font-weight: 400;
+  vertical-align: middle;
+}

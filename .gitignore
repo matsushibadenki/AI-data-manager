@@ -1,0 +1,32 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# WordPress specific (optional for theme-only repository)
+# Ignore logs and uploads if they ever get created here by mistake
+*.log
+uploads/
+
+# Environment files
+.env
+.env.local
+
+# Composer (if used in the future)
+vendor/

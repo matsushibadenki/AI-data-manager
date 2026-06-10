@@ -1,0 +1,148 @@
+@charset "utf-8";
+/* ============================================================
+ * File: /assets/css/base/color-css.css
+ * Name: color-css.css
+ * Description: デザインシステムのカラートークン定義
+ *              ダーク/ライトテーマの切り替え対応
+ *              data-theme="dark" / data-theme="light" で制御
+ *              切り替えフラグ: functions.php の FOURIER_THEME_MODE
+ * ============================================================ */
+
+/*--------------------------------------------------------------
+  共通トークン（テーマ非依存）
+--------------------------------------------------------------*/
+
+:root {
+  /* ─── アクセント（ゴールド） — 両テーマ共通 ─── */
+  --accent:           #C9A96E;
+  --accent-hover:     #D4B87A;
+  --accent-subtle:    rgba(201, 169, 110, 0.15);
+  --accent-glow:      rgba(201, 169, 110, 0.25);
+
+  /* ─── 状態 ─── */
+  --success:          #4ADE80;
+  --warning:          #FBBF24;
+  --error:            #F87171;
+
+  /* ─── トランジション ─── */
+  --transition-fast:  0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base:  0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow:  0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── 角丸 ─── */
+  --radius-sm:        6px;
+  --radius-md:        10px;
+  --radius-lg:        16px;
+  --radius-xl:        24px;
+  --radius-full:      9999px;
+
+  /* ─── フォントサイズ（既存互換） ─── */
+  --default-size:     16px;
+  --h1-size:          2.0;
+  --h2-size:          1.6;
+  --h3-size:          1.3;
+  --h4-size:          1.1;
+  --h5-size:          1.0;
+  --h6-size:          0.9;
+
+  /* ─── 旧変数互換 ─── */
+  --main-color:       201 169 110;
+  --secondary-color:  212 184 122;
+}
+
+
+/*--------------------------------------------------------------
+  ダークテーマ（デフォルト）
+  黒背景 + ゴールドアクセントの「Minimal Luxury」
+--------------------------------------------------------------*/
+
+[data-theme="dark"] {
+  /* ─── 背景 ─── */
+  --bg-primary:       #0A0A0A;
+  --bg-surface:       #141414;
+  --bg-surface-hover: #1A1A1A;
+  --bg-elevated:      #1E1E1E;
+
+  /* ─── ボーダー ─── */
+  --border-subtle:    #2A2A2A;
+  --border-medium:    #3A3A3A;
+
+  /* ─── テキスト ─── */
+  --text-primary:     #F5F5F5;
+  --text-secondary:   #888888;
+  --text-tertiary:    #666666;
+  --text-inverse:     #0A0A0A;
+
+  /* ─── オーバーレイ ─── */
+  --overlay-dark:     rgba(0, 0, 0, 0.6);
+  --overlay-glass:    rgba(20, 20, 20, 0.7);
+
+  /* ─── シャドウ ─── */
+  --shadow-sm:        0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md:        0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg:        0 8px 30px rgba(0, 0, 0, 0.6);
+  --shadow-gold:      0 4px 20px rgba(201, 169, 110, 0.15);
+
+  /* ─── 旧変数互換 ─── */
+  --text-color:       245 245 245;
+  --white-color:      255 255 255;
+  --black-color:      0 0 0;
+
+  color-scheme: dark;
+}
+
+
+/*--------------------------------------------------------------
+  ライトテーマ
+  白背景 + ゴールドアクセントの洗練されたクリーンデザイン
+--------------------------------------------------------------*/
+
+[data-theme="light"] {
+  /* ─── 背景 ─── */
+  --bg-primary:       #FAFAF8;
+  --bg-surface:       #FFFFFF;
+  --bg-surface-hover: #F5F5F3;
+  --bg-elevated:      #FFFFFF;
+
+  /* ─── ボーダー ─── */
+  --border-subtle:    #E8E6E1;
+  --border-medium:    #D5D3CE;
+
+  /* ─── テキスト ─── */
+  --text-primary:     #1A1A1A;
+  --text-secondary:   #6B6B6B;
+  --text-tertiary:    #999999;
+  --text-inverse:     #FFFFFF;
+
+  /* ─── アクセント（ライト用に少し濃く） ─── */
+  --accent:           #B8953F;
+  --accent-hover:     #A6842E;
+  --accent-subtle:    rgba(184, 149, 63, 0.10);
+  --accent-glow:      rgba(184, 149, 63, 0.20);
+
+  /* ─── オーバーレイ ─── */
+  --overlay-dark:     rgba(0, 0, 0, 0.3);
+  --overlay-glass:    rgba(255, 255, 255, 0.8);
+
+  /* ─── シャドウ ─── */
+  --shadow-sm:        0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md:        0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg:        0 8px 30px rgba(0, 0, 0, 0.10);
+  --shadow-gold:      0 4px 20px rgba(184, 149, 63, 0.12);
+
+  /* ─── 旧変数互換 ─── */
+  --text-color:       26 26 26;
+  --white-color:      255 255 255;
+  --black-color:      0 0 0;
+
+  color-scheme: light;
+}
+
+
+/*--------------------------------------------------------------
+  ユーティリティ
+--------------------------------------------------------------*/
+
+.key-c {
+  color: var(--accent);
+}
