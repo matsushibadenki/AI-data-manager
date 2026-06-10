@@ -429,3 +429,136 @@ function llm_api_call_custom($base_url, $model, $system, $user) {
     if (isset($parsed['variations'])) return $parsed['variations'];
     return $parsed;
 }
+
+add_action('wp_ajax_frontend_learning_data_scrape_url', 'frontend_learning_data_scrape_url_handler');
+add_action('wp_ajax_nopriv_frontend_learning_data_scrape_url', 'frontend_learning_data_scrape_url_handler');
+
+function frontend_learning_data_scrape_url_handler() {
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'learning_data_action')) {
+        wp_send_json_error(['message' => esc_html__('セッションが無効です。', 'fourier')]);
+    }
+
+    $url = isset($_POST['url']) ? esc_url_raw($_POST['url']) : '';
+    $target_format = isset($_POST['target_format']) ? sanitize_text_field($_POST['target_format']) : 'instruction';
+    $provider = isset($_POST['provider']) ? sanitize_text_field($_POST['provider']) : 'openai';
+    $extra_prompt = isset($_POST['extra_prompt']) ? sanitize_textarea_field($_POST['extra_prompt']) : '';
+    $title = isset($_POST['title']) ? sanitize_text_field($_POST['title']) : '';
+
+    if (!$url || !$title) {
+        wp_send_json_error(['message' => esc_html__('URLとタイトルは必須です。', 'fourier')]);
+    }
+
+    // 1. URLからHTMLを取得
+    $response = wp_remote_get($url, ['timeout' => 30]);
+    if (is_wp_error($response)) {
+        wp_send_json_error(['message' => esc_html__('URLの取得に失敗しました: ', 'fourier') . $response->get_error_message()]);
+    }
+    
+    $status_code = wp_remote_retrieve_response_code($response);
+    if ($status_code !== 200) {
+        wp_send_json_error(['message' => esc_html__('URLの取得に失敗しました (Status: ', 'fourier') . $status_code . ')']);
+    }
+
+    $html = wp_remote_retrieve_body($response);
+
+    // 2. テキスト抽出 (script, style を除去してからタグ削除)
+    $html = preg_replace('/<script\b[^>]*>(.*?)<\/script>/is', '', $html);
+    $html = preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $html);
+    $text = wp_strip_all_tags($html);
+    // 連続する空白や改行をまとめる
+    $text = preg_replace('/\s+/', ' ', $text);
+    // トークン数制限のため、先頭から15000文字程度でカット
+    $text = mb_substr(trim($text), 0, 15000);
+
+    if (empty($text)) {
+        wp_send_json_error(['message' => esc_html__('テキストを抽出できませんでした。', 'fourier')]);
+    }
+
+    // 3. プロンプト構築
+    $system_prompt = "あなたはAI学習データを作成する優秀なデータエンジニアです。ユーザーから提供されたWebページのテキストを読み取り、指定されたフォーマットのAI学習データを生成してください。出力は必ずJSON形式のみにし、マークダウンや余分なテキストを含めないでください。";
+    $user_prompt = "【指定フォーマット】: {$target_format}\n";
+    $user_prompt .= "生成するデータは、このフォーマットに沿った有効なJSON（単一のオブジェクトまたは配列）にしてください。\n";
+    if ($extra_prompt) {
+        $user_prompt .= "【追加の指示】: {$extra_prompt}\n";
+    }
+    $user_prompt .= "\n【Webページのテキスト】:\n{$text}\n";
+
+    // 4. LLM API 呼び出し
+    $current_user_id = get_current_user_id();
+    $llm_response_text = "";
+    try {
+        switch ($provider) {
+            case 'openai':
+                $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+                if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
+                $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
+                break;
+
+            case 'gemini':
+                $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+                if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
+                $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
+                break;
+
+            case 'ollama':
+                $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
+                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+                $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
+                break;
+
+            case 'custom':
+                $url = get_user_meta($current_user_id, 'llm_custom_url', true) ?: 'http://127.0.0.1:8080/v1';
+                $model = get_user_meta($current_user_id, 'llm_custom_model', true);
+                $llm_response_text = llm_api_call_custom($url, $model, $system_prompt, $user_prompt);
+                break;
+
+            default:
+                throw new Exception("不明なプロバイダです。");
+        }
+    } catch (Exception $e) {
+        wp_send_json_error(['message' => $e->getMessage()]);
+    }
+
+    if (empty($llm_response_text)) {
+        wp_send_json_error(['message' => 'LLMから有効な応答が返されませんでした。']);
+    }
+
+    // JSONパース
+    $parsed_json = _parse_json_from_llm_response($llm_response_text);
+    if ($parsed_json === null) {
+        wp_send_json_error(['message' => esc_html__('LLMからのJSONパースに失敗しました。', 'fourier')]);
+    }
+
+    // 5. データ保存
+    $payload = [
+        'format' => $target_format,
+        'data' => $parsed_json
+    ];
+
+    $post_data = array(
+        'post_title'   => $title,
+        'post_content' => wp_slash(json_encode($payload, JSON_UNESCAPED_UNICODE)),
+        'post_status'  => 'publish',
+        'post_type'    => 'post',
+        'post_author'  => $current_user_id
+    );
+
+    $post_id = wp_insert_post($post_data);
+    if (is_wp_error($post_id)) {
+        wp_send_json_error(['message' => esc_html__('データの保存に失敗しました。', 'fourier')]);
+    }
+
+    update_post_meta($post_id, 'is_learning_data', '1');
+
+    $meta_fields = ['language', 'category', 'difficulty', 'quality', 'source', 'tags'];
+    foreach ($meta_fields as $field) {
+        if (isset($_POST[$field]) && $_POST[$field] !== '') {
+            $val = sanitize_text_field($_POST[$field]);
+            update_post_meta($post_id, 'learning_data_' . $field, $val);
+        }
+    }
+
+    wp_send_json_success(['post_id' => $post_id]);
+}

@@ -98,9 +98,63 @@ get_header();
     .upload-page-container {
         max-width: 100% !important;
         width: 100% !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding: 2rem 5% !important;
         box-sizing: border-box;
+    }
+
+    button.btn-black {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.85rem;
+        line-height: 1;
+        text-decoration: none;
+        background-color: var(--bg-surface, #fff);
+        color: var(--text-primary, #333);
+        border: 1px solid var(--border-subtle, #ccc);
+        padding: 0.7rem 1.8rem;
+        border-radius: var(--radius-full, 999px);
+        font-weight: 400;
+        letter-spacing: 0.03em;
+        transition: all var(--transition-base, 0.2s);
+        cursor: pointer;
+    }
+    button.btn-black:hover:not(:disabled) {
+        color: var(--accent, #C9A96E);
+        border-color: var(--accent, #C9A96E);
+        background-color: var(--accent-subtle, rgba(201,169,110,0.1));
+        box-shadow: var(--shadow-gold, 0 2px 8px rgba(201,169,110,0.2));
+        transform: translateY(-1px);
+    }
+    button.btn-black:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        margin: 0;
+        border-radius: 4px;
+        text-decoration: none;
+        color: var(--text-primary, #333);
+        border: 1px solid var(--border-subtle, #ccc);
+        background: var(--bg-surface, #fff);
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .action-btn span {
+        font-size: 1.1rem !important;
+        line-height: 1;
     }
 
     /* ヘッダー周りの調整 */
@@ -735,15 +789,15 @@ get_header();
                     td.style.verticalAlign = 'middle';
                     td.style.padding = '0.2rem';
                     td.innerHTML = `
-                        <div style="display: flex; gap: 0.5rem; justify-content: center;">
-                            <a href="${editBaseUrl}?edit_id=${id}" class="btn-black" style="display: inline-flex; justify-content: center; align-items: center; width: 1.8rem; height: 1.8rem; padding: 0; min-width: 0; text-decoration: none;" title="編集">
-                                <span class="material-symbols-outlined" style="font-size: 0.9rem; line-height: 1; display: inline-block;">edit</span>
+                        <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
+                            <a href="${editBaseUrl}?edit_id=${id}" class="action-btn" title="編集">
+                                <span class="material-symbols-outlined">edit</span>
                             </a>
-                            <button type="button" class="btn-black btn-open-var" data-id="${id}" style="display: inline-flex; justify-content: center; align-items: center; width: 1.8rem; height: 1.8rem; padding: 0; min-width: 0; background: #C9A96E; border-color: #C9A96E;" title="バリエーション生成">
-                                <span class="material-symbols-outlined" style="font-size: 0.9rem; line-height: 1; display: inline-block;">auto_awesome</span>
+                            <button type="button" class="action-btn btn-open-var" data-id="${id}" style="background: #C9A96E; border-color: #C9A96E; color: #fff;" title="バリエーション生成">
+                                <span class="material-symbols-outlined">auto_awesome</span>
                             </button>
-                            <button type="button" class="btn-black btn-open-distill" data-id="${id}" style="display: inline-flex; justify-content: center; align-items: center; width: 1.8rem; height: 1.8rem; padding: 0; min-width: 0; background: #6b4c9a; border-color: #6b4c9a;" title="データ蒸留">
-                                <span class="material-symbols-outlined" style="font-size: 0.9rem; line-height: 1; display: inline-block;">science</span>
+                            <button type="button" class="action-btn btn-open-distill" data-id="${id}" style="background: #6b4c9a; border-color: #6b4c9a; color: #fff;" title="データ蒸留">
+                                <span class="material-symbols-outlined">science</span>
                             </button>
                         </div>
                     `;

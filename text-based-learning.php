@@ -478,6 +478,9 @@ button.btn-black span.material-symbols-outlined {
                     <button type="button" class="learning-tab" data-target="tab-dpo">DPO / RLHF</button>
                     <button type="button" class="learning-tab" data-target="tab-frontend">HTML/CSS/JS</button>
                     <button type="button" class="learning-tab" data-target="tab-structured">構造化データ</button>
+                    <button type="button" class="learning-tab" data-target="tab-scrape" style="background: var(--accent-subtle, rgba(201,169,110,0.1)); color: var(--accent, #C9A96E); border: 1px solid var(--accent, #C9A96E);">
+                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: -2px;">language</span> URL自動取得
+                    </button>
                 </div>
 
                 <!-- 1. プレーンテキスト -->
@@ -582,6 +585,42 @@ button.btn-black span.material-symbols-outlined {
                         <label for="structured-json"><?php echo esc_html__('JSONデータ:', 'fourier'); ?></label>
                         <textarea id="structured-json" class="upload-form-input" rows="10" placeholder='{"key": "value", ...}' style="font-family: monospace;"></textarea>
                         <small style="color: var(--text-secondary);">※有効なJSON形式で入力してください。</small>
+                    </div>
+                </div>
+
+                <!-- 8. URLスクレイピング登録 -->
+                <div id="tab-scrape" class="learning-tab-content" data-format="scrape">
+                    <div class="upload-form-group">
+                        <label for="scrape-url"><?php echo esc_html__('対象URL (Wikipediaやブログ記事など):', 'fourier'); ?></label>
+                        <input type="url" id="scrape-url" class="upload-form-input" placeholder="https://..." />
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="scrape-target-format"><?php echo esc_html__('生成するデータ形式:', 'fourier'); ?></label>
+                        <select id="scrape-target-format" class="upload-form-input">
+                            <option value="instruction">Instruction (QAペア)</option>
+                            <option value="chatml">ChatML (会話形式)</option>
+                            <option value="cot">CoT (思考過程付き)</option>
+                            <option value="dpo">DPO / RLHF (比較データ)</option>
+                            <option value="plain">プレーンテキスト要約</option>
+                        </select>
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="scrape-provider"><?php echo esc_html__('LLMプロバイダ:', 'fourier'); ?></label>
+                        <select id="scrape-provider" class="upload-form-input">
+                            <option value="openai">OpenAI (推奨)</option>
+                            <option value="gemini">Google Gemini</option>
+                            <option value="ollama">Ollama (Local)</option>
+                            <option value="custom">Custom (Llama.cpp等)</option>
+                        </select>
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="scrape-prompt"><?php echo esc_html__('追加の指示（任意）:', 'fourier'); ?></label>
+                        <textarea id="scrape-prompt" class="upload-form-input" rows="3" placeholder="例: 内容を小学生にもわかるように易しく解説するQAセットを作成して。"></textarea>
+                    </div>
+                    <div style="margin-top: 1.5rem; text-align: center;">
+                        <button type="button" id="btn-scrape-submit" class="btn-black" style="background: var(--accent); border-color: var(--accent); color: var(--text-inverse);">
+                            <span class="material-symbols-outlined">language</span> 自動取得・生成して登録
+                        </button>
                     </div>
                 </div>
 
@@ -711,6 +750,12 @@ button.btn-black span.material-symbols-outlined {
                 const targetContent = document.getElementById(targetId);
                 targetContent.classList.add('active');
                 currentFormat = targetContent.getAttribute('data-format');
+
+                if (currentFormat === 'scrape') {
+                    document.getElementById('btn-save-data').parentElement.style.display = 'none';
+                } else {
+                    document.getElementById('btn-save-data').parentElement.style.display = 'block';
+                }
             });
         });
 
@@ -924,6 +969,80 @@ button.btn-black span.material-symbols-outlined {
                 }
             })
             .catch(error => {
+                showStatus('通信エラーが発生しました。', true);
+            });
+        });
+
+        // URLスクレイピング処理
+        document.getElementById('btn-scrape-submit').addEventListener('click', function() {
+            const url = document.getElementById('scrape-url').value.trim();
+            const targetFormat = document.getElementById('scrape-target-format').value;
+            const provider = document.getElementById('scrape-provider').value;
+            const extraPrompt = document.getElementById('scrape-prompt').value.trim();
+
+            if (!url) {
+                showStatus('URLを入力してください。', true);
+                return;
+            }
+
+            const titleInput = document.getElementById('data-title').value.trim();
+            if (!titleInput) {
+                showStatus('タイトルを入力してください。自動取得の場合もタイトルは必須です。', true);
+                return;
+            }
+
+            // メタデータ収集
+            var metaLang = document.getElementById('meta-language');
+            var metaCat = document.getElementById('meta-category');
+            var metaDiff = document.getElementById('meta-difficulty');
+            var metaQuality = document.getElementById('meta-quality');
+            var metaSource = document.getElementById('meta-source');
+            var metaTags = document.getElementById('meta-tags');
+
+            const formData = new FormData();
+            formData.append('action', 'frontend_learning_data_scrape_url');
+            formData.append('nonce', uploadNonce);
+            formData.append('url', url);
+            formData.append('target_format', targetFormat);
+            formData.append('provider', provider);
+            formData.append('extra_prompt', extraPrompt);
+            formData.append('title', titleInput);
+
+            if (metaLang && metaLang.value) formData.append('language', metaLang.value);
+            if (metaCat && metaCat.value) formData.append('category', metaCat.value);
+            if (metaDiff && metaDiff.value) formData.append('difficulty', metaDiff.value);
+            if (metaQuality && metaQuality.value) formData.append('quality', metaQuality.value);
+            if (metaSource && metaSource.value) {
+                formData.append('source', metaSource.value);
+            } else {
+                formData.append('source', url); // 入力がなければURLをソースに設定
+            }
+            if (metaTags && metaTags.value) formData.append('tags', metaTags.value);
+
+            showStatus('URLからデータを取得・生成しています... (数分かかる場合があります)', false);
+            this.disabled = true;
+            this.style.opacity = '0.5';
+
+            fetch(ajaxUrl, {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(response => {
+                this.disabled = false;
+                this.style.opacity = '1';
+                
+                if (response.success) {
+                    showStatus('データの自動取得と登録が完了しました！(ID: ' + response.data.post_id + ')', false);
+                    document.getElementById('scrape-url').value = '';
+                    document.getElementById('data-title').value = '';
+                } else {
+                    showStatus(response.data.message || '処理に失敗しました。', true);
+                }
+            })
+            .catch(error => {
+                this.disabled = false;
+                this.style.opacity = '1';
                 showStatus('通信エラーが発生しました。', true);
             });
         });

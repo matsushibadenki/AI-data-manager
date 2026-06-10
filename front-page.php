@@ -382,13 +382,9 @@ get_header();
                 </div>
                 
                 <div style="text-align: right;">
-                    <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">
+                    <p style="margin: 0; font-size: 0.9rem;">
                         <?php echo esc_html__('ようこそ', 'fourier'); ?>, <strong><?php $current_user = wp_get_current_user(); echo esc_html($current_user->display_name); ?></strong>
                     </p>
-                    <a href="<?php echo esc_url(wp_logout_url(home_url('/'))); ?>" class="btn-black" style="font-size: 0.75rem; padding: 0.4rem 1rem;">
-                        <span class="material-symbols-outlined" style="font-size: 1rem;">logout</span>
-                        <?php echo esc_html__('ログアウト', 'fourier'); ?>
-                    </a>
                 </div>
             </div>
 

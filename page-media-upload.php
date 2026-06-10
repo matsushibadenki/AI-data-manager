@@ -82,11 +82,7 @@ get_header();
             </div>
         <?php else : ?>
             <!-- アップロード画面 -->
-            <div class="logout-wrapper" style="text-align: right; margin-bottom: 1rem;">
-                <a href="<?php echo esc_url(wp_logout_url(home_url('/'))); ?>" class="btn-logout" style="font-size: 0.85rem; color: var(--text-secondary); text-decoration: underline;">
-                    <?php echo esc_html__('ログアウト', 'fourier'); ?>
-                </a>
-            </div>
+
 
             <h2 class="upload-title"><?php echo esc_html__('メディアの登録', 'fourier'); ?></h2>
             <p class="upload-desc"><?php echo esc_html__('ファイルをドラッグ＆ドロップするか、「ファイルを選択」ボタンをクリックしてアップロードしてください。', 'fourier'); ?></p>
