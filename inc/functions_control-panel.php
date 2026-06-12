@@ -139,158 +139,251 @@ function custom_media_grid_styles() {
         .attachments-wrapper>ul li div.thumbnail img {
             width: 100% !important;
         }
+        
+        /* メディアツールバーのフレックスボックスレイアウト最適化 */
+        .media-toolbar.wp-filter {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            align-items: center !important;
+            gap: 10px !important;
+            height: auto !important;
+            padding: 10px 15px !important;
+        }
+        .media-toolbar-secondary, .media-toolbar-primary {
+            display: flex !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+            float: none !important;
+            height: auto !important;
+        }
+        .media-toolbar-secondary {
+            flex: 1;
+        }
+        .media-toolbar-primary {
+            justify-content: flex-end;
+        }
+        
+        /* カスタムコントロールのスタイル */
         #custom-grid-control {
-            margin:0 0 0.5rem 2rem;
-            display:inline-block;
-            vertical-align: middle;
-            font-size:1rem;
+            display: flex !important;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            margin-left: 10px;
+            border-left: 1px solid #ddd;
+            padding-left: 10px;
+            order: 99; /* 右側に配置するため */
+        }
+        #btn-select-all-media {
+            margin-left: 5px;
+        }
+
+        /* 一括選択モード時の制御 */
+        .media-toolbar.select-mode .media-toolbar-secondary {
+            display: flex !important;
+        }
+        .media-toolbar.select-mode .media-toolbar-secondary > *:not(#custom-grid-control) {
+            display: none !important;
         }
     </style>';
 
     echo '<script>
         document.addEventListener("DOMContentLoaded", function() {
-            function addGridControl() {
-                if (document.getElementById("custom-grid-control")) return;
+            function initCustomControls() {
+                // 1. カスタムコントロールの追加（カラム数、書き出し等）
+                if (!document.getElementById("custom-grid-control")) {
+                    let secondaryToolbar = document.querySelector(".media-toolbar-secondary");
+                    if (secondaryToolbar) {
+                        let controlPanel = document.createElement("div");
+                        controlPanel.id = "custom-grid-control";
+                        controlPanel.innerHTML = `
+                            <label for="custom-grid-columns" style="font-weight:500;">カラム数:</label>
+                            <select id="custom-grid-columns" style="max-width: 60px;">
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4" selected>4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                            </select>
+                            <button type="button" id="btn-export-images" class="button button-secondary">画像を書き出す</button>
+                            <button type="button" id="btn-delete-exported" class="button" style="color: #b32d2e; border-color: #b32d2e;" onmouseover="this.style.backgroundColor=\'#fcf0f0\'" onmouseout="this.style.backgroundColor=\'transparent\'">書き出し削除</button>
+                            <span id="export-status-message" style="font-size: 12px; font-weight: 500; transition: color 0.2s;"></span>
+                        `;
+                        // .media-toolbar-secondary に追加し、選択モードでも見えるようCSSで制御
+                        secondaryToolbar.appendChild(controlPanel);
 
-                let mediaGrid = document.querySelector("#wp-media-grid");
-                if (!mediaGrid) return;
-
-                let controlPanel = document.createElement("div");
-                controlPanel.id = "custom-grid-control";
-                controlPanel.innerHTML = `
-                    <label for="custom-grid-columns">カラム数: </label>
-                    <select id="custom-grid-columns">
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4" selected>4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                        <option value="9">9</option>
-                        <option value="10">10</option>
-                    </select>
-                    <button type="button" id="btn-export-images" class="button button-secondary" style="margin-left: 15px; vertical-align: middle;">画像を書き出す</button>
-                    <button type="button" id="btn-delete-exported" class="button" style="margin-left: 10px; vertical-align: middle; color: #b32d2e; border-color: #b32d2e;" onmouseover="this.style.backgroundColor=\'#fcf0f0\'" onmouseout="this.style.backgroundColor=\'transparent\'">書き出し画像を削除</button>
-                    <span id="export-status-message" style="margin-left: 15px; font-size: 0.9rem; font-weight: 500; vertical-align: middle; transition: color 0.2s;"></span>
-                `;
-
-                let hrElement = mediaGrid.querySelector("hr");
-                if (hrElement) {
-                    hrElement.parentNode.insertBefore(controlPanel, hrElement);
-                }
-
-                let selectElement = document.getElementById("custom-grid-columns");
-                selectElement.addEventListener("change", function() {
-                    document.documentElement.style.setProperty("--custom-grid-columns", this.value);
-                    localStorage.setItem("customGridColumns", this.value);
-                });
-
-                let savedColumns = localStorage.getItem("customGridColumns");
-                if (savedColumns) {
-                    selectElement.value = savedColumns;
-                    document.documentElement.style.setProperty("--custom-grid-columns", savedColumns);
-                }
-
-                // 画像書き出しボタンのイベント
-                let btnExport = document.getElementById("btn-export-images");
-                if (btnExport) {
-                    btnExport.addEventListener("click", function() {
-                        let selectedItems = document.querySelectorAll(".attachments-wrapper>ul li.selected");
-                        let ids = [];
-                        selectedItems.forEach(item => {
-                            let id = item.getAttribute("data-id");
-                            if (id) ids.push(parseInt(id, 10));
+                        // カラム数変更イベント
+                        let selectElement = document.getElementById("custom-grid-columns");
+                        selectElement.addEventListener("change", function() {
+                            document.documentElement.style.setProperty("--custom-grid-columns", this.value);
+                            localStorage.setItem("customGridColumns", this.value);
                         });
 
-                        let statusSpan = document.getElementById("export-status-message");
-
-                        if (ids.length === 0) {
-                            alert("画像が選択されていません。「一括選択」ボタンを押して、書き出す画像を選択してください。");
-                            return;
+                        let savedColumns = localStorage.getItem("customGridColumns");
+                        if (savedColumns) {
+                            selectElement.value = savedColumns;
+                            document.documentElement.style.setProperty("--custom-grid-columns", savedColumns);
                         }
 
-                        statusSpan.textContent = "書き出し中...";
-                        statusSpan.style.color = "#666";
-                        btnExport.disabled = true;
+                        // 書き出しボタン
+                        let btnExport = document.getElementById("btn-export-images");
+                        btnExport.addEventListener("click", function() {
+                            let selectedItems = document.querySelectorAll(".attachments-wrapper>ul li.selected");
+                            let ids = [];
+                            selectedItems.forEach(item => {
+                                let id = item.getAttribute("data-id");
+                                if (id) ids.push(parseInt(id, 10));
+                            });
 
-                        let fd = new FormData();
-                        fd.append("action", "export_selected_images");
-                        fd.append("ids", JSON.stringify(ids));
+                            let statusSpan = document.getElementById("export-status-message");
 
-                        fetch(ajaxurl, {
-                            method: "POST",
-                            body: fd
-                        })
-                        .then(r => r.json())
-                        .then(res => {
-                            btnExport.disabled = false;
-                            if (res.success) {
-                                statusSpan.textContent = res.data.message;
-                                statusSpan.style.color = "#46b450";
-                                if (res.data.zip_url) {
-                                    // ZIPダウンロードのトリガー (ポップアップブロックを回避するため window.location.href を使用)
-                                    window.location.href = res.data.zip_url + "?t=" + new Date().getTime();
+                            if (ids.length === 0) {
+                                alert("画像が選択されていません。「一括選択」ボタンを押して、書き出す画像を選択してください。");
+                                return;
+                            }
+
+                            statusSpan.textContent = "書き出し中...";
+                            statusSpan.style.color = "#666";
+                            btnExport.disabled = true;
+
+                            let fd = new FormData();
+                            fd.append("action", "export_selected_images");
+                            fd.append("ids", JSON.stringify(ids));
+
+                            fetch(ajaxurl, {
+                                method: "POST",
+                                body: fd
+                            }).then(r => r.json()).then(res => {
+                                btnExport.disabled = false;
+                                if (res.success) {
+                                    statusSpan.textContent = res.data.message;
+                                    statusSpan.style.color = "#46b450";
+                                    if (res.data.zip_url) window.location.href = res.data.zip_url + "?t=" + new Date().getTime();
+                                } else {
+                                    statusSpan.textContent = "エラー: " + res.data.message;
+                                    statusSpan.style.color = "#dc3232";
                                 }
-                            } else {
-                                statusSpan.textContent = "エラー: " + res.data.message;
+                            }).catch(err => {
+                                btnExport.disabled = false;
+                                statusSpan.textContent = "通信エラー";
                                 statusSpan.style.color = "#dc3232";
-                            }
-                        })
-                        .catch(err => {
-                            btnExport.disabled = false;
-                            statusSpan.textContent = "通信エラー";
-                            statusSpan.style.color = "#dc3232";
-                            console.error(err);
+                            });
                         });
-                    });
+
+                        // 削除ボタン
+                        let btnDelete = document.getElementById("btn-delete-exported");
+                        btnDelete.addEventListener("click", function() {
+                            if (!confirm("サーバー上に書き出されたすべての画像を物理削除しますか？\n（メディアライブラリの元の画像は削除されません）")) return;
+
+                            let statusSpan = document.getElementById("export-status-message");
+                            statusSpan.textContent = "削除中...";
+                            statusSpan.style.color = "#666";
+                            btnDelete.disabled = true;
+
+                            let fd = new FormData();
+                            fd.append("action", "delete_exported_images");
+
+                            fetch(ajaxurl, { method: "POST", body: fd })
+                            .then(r => r.json()).then(res => {
+                                btnDelete.disabled = false;
+                                if (res.success) {
+                                    statusSpan.textContent = res.data.message;
+                                    statusSpan.style.color = "#46b450";
+                                } else {
+                                    statusSpan.textContent = "エラー: " + res.data.message;
+                                    statusSpan.style.color = "#dc3232";
+                                }
+                            }).catch(err => {
+                                btnDelete.disabled = false;
+                                statusSpan.textContent = "通信エラー";
+                                statusSpan.style.color = "#dc3232";
+                            });
+                        });
+                    }
                 }
 
-                // 書き出し画像削除ボタンのイベント
-                let btnDelete = document.getElementById("btn-delete-exported");
-                if (btnDelete) {
-                    btnDelete.addEventListener("click", function() {
-                        if (!confirm("サーバー上に書き出されたすべての画像を物理削除しますか？\n（メディアライブラリの元の画像は削除されません）")) {
-                            return;
+                // 2. 「すべて選択」ボタンの追加
+                let bulkSelectBtn = document.querySelector(".select-mode-toggle-button");
+                if (bulkSelectBtn && !document.getElementById("btn-select-all-media")) {
+                    let selectAllBtn = document.createElement("button");
+                    selectAllBtn.type = "button";
+                    selectAllBtn.id = "btn-select-all-media";
+                    selectAllBtn.className = "button button-primary";
+                    selectAllBtn.textContent = "すべて選択";
+                    
+                    bulkSelectBtn.parentNode.insertBefore(selectAllBtn, bulkSelectBtn.nextSibling);
+
+                    // 表示状態の同期
+                    const syncVisibility = () => {
+                        let isSelectionMode = document.querySelector(".media-toolbar").classList.contains("select-mode");
+                        if (isSelectionMode) {
+                            selectAllBtn.style.display = "inline-block";
+                        } else {
+                            // selectAllBtn.style.display = "none"; // 一括選択モードじゃなくても押せるようにするか？
+                            // いいえ、一括選択モードを自動起動させるので常に表示しておくのが便利。
+                        }
+                    };
+
+                    selectAllBtn.addEventListener("click", function() {
+                        let isSelectionMode = document.querySelector(".media-toolbar").classList.contains("select-mode");
+                        if (!isSelectionMode) {
+                            // 一括選択モードをオンにする
+                            bulkSelectBtn.click();
                         }
 
-                        let statusSpan = document.getElementById("export-status-message");
-                        statusSpan.textContent = "削除中...";
-                        statusSpan.style.color = "#666";
-                        btnDelete.disabled = true;
-
-                        let fd = new FormData();
-                        fd.append("action", "delete_exported_images");
-
-                        fetch(ajaxurl, {
-                            method: "POST",
-                            body: fd
-                        })
-                        .then(r => r.json())
-                        .then(res => {
-                            btnDelete.disabled = false;
-                            if (res.success) {
-                                statusSpan.textContent = res.data.message;
-                                statusSpan.style.color = "#46b450";
+                        // 少し待ってから選択状態を判定
+                        setTimeout(() => {
+                            let unselected = document.querySelectorAll(".attachments-wrapper>ul li.attachment:not(.selected)");
+                            let allAttachments = document.querySelectorAll(".attachments-wrapper>ul li.attachment");
+                            
+                            if (unselected.length > 0) {
+                                // 未選択のものがあれば全て選択する
+                                unselected.forEach(item => {
+                                    let check = item.querySelector(".check");
+                                    if (check) check.click();
+                                    else item.click();
+                                });
+                                selectAllBtn.textContent = "すべて解除";
                             } else {
-                                statusSpan.textContent = "エラー: " + res.data.message;
-                                statusSpan.style.color = "#dc3232";
+                                // 全て選択されていれば全て解除する
+                                allAttachments.forEach(item => {
+                                    if (item.classList.contains("selected")) {
+                                        let check = item.querySelector(".check");
+                                        if (check) check.click();
+                                        else item.click();
+                                    }
+                                });
+                                selectAllBtn.textContent = "すべて選択";
                             }
-                        })
-                        .catch(err => {
-                            btnDelete.disabled = false;
-                            statusSpan.textContent = "通信エラー";
-                            statusSpan.style.color = "#dc3232";
-                            console.error(err);
-                        });
+                        }, 50);
                     });
+
+                    // 選択状態の監視（手動で選択・解除された時にボタンのテキストを更新）
+                    const listObserver = new MutationObserver(() => {
+                        let unselectedCount = document.querySelectorAll(".attachments-wrapper>ul li.attachment:not(.selected)").length;
+                        let totalCount = document.querySelectorAll(".attachments-wrapper>ul li.attachment").length;
+                        if (totalCount > 0 && unselectedCount === 0) {
+                            selectAllBtn.textContent = "すべて解除";
+                        } else {
+                            selectAllBtn.textContent = "すべて選択";
+                        }
+                    });
+
+                    let attachmentList = document.querySelector(".attachments-wrapper>ul");
+                    if (attachmentList) {
+                        listObserver.observe(attachmentList, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+                    }
                 }
             }
 
             const observer = new MutationObserver(() => {
-                if (document.querySelector("#wp-media-grid hr")) {
-                    addGridControl();
-                    observer.disconnect();
+                if (document.querySelector(".media-toolbar")) {
+                    initCustomControls();
                 }
             });
 
