@@ -30,6 +30,7 @@ require_once get_template_directory() . '/inc/functions_filebirdAPI.php';
 require_once get_template_directory() . '/inc/functions_learning-data.php';
 require_once get_template_directory() . '/inc/functions_llm_api.php';
 require_once get_template_directory() . '/inc/functions_rest_api.php';
+require_once get_template_directory() . '/inc/functions_sara_event_memory.php';
 
 /* ----------------------- 重複メディア管理の設定 ---------------------- */
 require_once get_template_directory() . '/inc/functions_duplicate-media.php';

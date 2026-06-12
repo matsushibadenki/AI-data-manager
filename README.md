@@ -1,7 +1,8 @@
 # AI Data Manager (WordPress Theme)
 
 WordPressを「LLM（大規模言語モデル）の学習データ管理・アノテーションツール」へと進化させる、特化型のWordPressテーマです。
-
+Sara-engine（https://github.com/matsushibadenki/sara-engine-project）に最適化されています。  
+  
 通常のブログやWebサイトとして公開するためのテーマではなく、クローズドな環境でデータエンジニアやAI研究者が高品質なデータセットを構築・管理するための**Webアプリケーション**として機能するように設計されています。
 
 ## 🎯 設計と思想 (Design & Philosophy)
