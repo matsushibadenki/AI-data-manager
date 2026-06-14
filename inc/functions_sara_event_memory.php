@@ -18,7 +18,7 @@ add_action('admin_init', 'fourier_sara_event_memory_maybe_install');
 
 function fourier_sara_event_memory_maybe_install() {
     $installed_version = get_option('fourier_sara_event_memory_schema_version');
-    if ($installed_version !== '1.0.0') {
+    if ($installed_version !== '2.0.0') {
         fourier_sara_event_memory_install();
     }
 }
@@ -32,6 +32,9 @@ function fourier_sara_event_memory_install() {
     $sources_table = $wpdb->prefix . 'sara_sources';
     $events_table = $wpdb->prefix . 'sara_events';
     $experiences_table = $wpdb->prefix . 'sara_experiences';
+    $relations_table = $wpdb->prefix . 'sara_relations';
+    $concepts_table = $wpdb->prefix . 'sara_concepts';
+    $priority_table = $wpdb->prefix . 'sara_priority';
 
     $sql_sources = "CREATE TABLE {$sources_table} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -66,6 +69,17 @@ function fourier_sara_event_memory_install() {
         prediction_error DOUBLE NOT NULL DEFAULT 0,
         confidence DOUBLE NOT NULL DEFAULT 1,
         quality_score DOUBLE NOT NULL DEFAULT 0.5,
+        proposal_source VARCHAR(32) NOT NULL DEFAULT 'manual',
+        extractor_name VARCHAR(128) NULL,
+        extractor_version VARCHAR(64) NULL,
+        verification_state VARCHAR(32) NOT NULL DEFAULT 'unverified',
+        evidence_type VARCHAR(64) NOT NULL DEFAULT 'candidate',
+        source_hash VARCHAR(128) NULL,
+        event_cost DOUBLE NOT NULL DEFAULT 1,
+        novelty DOUBLE NOT NULL DEFAULT 0,
+        redundancy DOUBLE NOT NULL DEFAULT 0,
+        coverage DOUBLE NOT NULL DEFAULT 0,
+        priority_score DOUBLE NOT NULL DEFAULT 0,
         tags TEXT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
@@ -76,7 +90,10 @@ function fourier_sara_event_memory_install() {
         KEY event_type (event_type),
         KEY t (t),
         KEY prediction_error (prediction_error),
-        KEY quality_score (quality_score)
+        KEY quality_score (quality_score),
+        KEY proposal_source (proposal_source),
+        KEY verification_state (verification_state),
+        KEY priority_score (priority_score)
     ) {$charset_collate};";
 
     $sql_experiences = "CREATE TABLE {$experiences_table} (
@@ -104,11 +121,82 @@ function fourier_sara_event_memory_install() {
         KEY quality_score (quality_score)
     ) {$charset_collate};";
 
+
+    $sql_relations = "CREATE TABLE {$relations_table} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        relation_uid VARCHAR(128) NOT NULL,
+        source_event_uid VARCHAR(128) NOT NULL,
+        relation_type VARCHAR(64) NOT NULL DEFAULT 'predicts',
+        target_event_uid VARCHAR(128) NOT NULL,
+        min_delay_ms DOUBLE NOT NULL DEFAULT 0,
+        max_delay_ms DOUBLE NOT NULL DEFAULT 0,
+        confidence DOUBLE NOT NULL DEFAULT 0.5,
+        evidence_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        counterexample_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        verification_state VARCHAR(32) NOT NULL DEFAULT 'unverified',
+        proposal_source VARCHAR(32) NOT NULL DEFAULT 'manual',
+        payload_json LONGTEXT NULL,
+        expiry DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY relation_uid (relation_uid),
+        KEY source_event_uid (source_event_uid),
+        KEY target_event_uid (target_event_uid),
+        KEY relation_type (relation_type),
+        KEY verification_state (verification_state)
+    ) {$charset_collate};";
+
+    $sql_concepts = "CREATE TABLE {$concepts_table} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        concept_uid VARCHAR(128) NOT NULL,
+        label TEXT NULL,
+        concept_type VARCHAR(64) NOT NULL DEFAULT 'dynamic_mode',
+        evidence_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        contradiction_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        verification_state VARCHAR(32) NOT NULL DEFAULT 'candidate',
+        utility_score DOUBLE NOT NULL DEFAULT 0,
+        event_pattern_json LONGTEXT NULL,
+        source_refs_json LONGTEXT NULL,
+        payload_json LONGTEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY concept_uid (concept_uid),
+        KEY concept_type (concept_type),
+        KEY verification_state (verification_state),
+        KEY utility_score (utility_score)
+    ) {$charset_collate};";
+
+    $sql_priority = "CREATE TABLE {$priority_table} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        item_uid VARCHAR(128) NOT NULL,
+        item_type VARCHAR(32) NOT NULL DEFAULT 'event',
+        priority_score DOUBLE NOT NULL DEFAULT 0,
+        prediction_error DOUBLE NOT NULL DEFAULT 0,
+        novelty DOUBLE NOT NULL DEFAULT 0,
+        reward DOUBLE NOT NULL DEFAULT 0,
+        coverage DOUBLE NOT NULL DEFAULT 0,
+        redundancy DOUBLE NOT NULL DEFAULT 0,
+        reason_json LONGTEXT NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'queued',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY item_uid_type (item_uid, item_type),
+        KEY priority_score (priority_score),
+        KEY status (status)
+    ) {$charset_collate};";
+
     dbDelta($sql_sources);
     dbDelta($sql_events);
     dbDelta($sql_experiences);
 
-    update_option('fourier_sara_event_memory_schema_version', '1.0.0');
+    dbDelta($sql_relations);
+    dbDelta($sql_concepts);
+    dbDelta($sql_priority);
+
+    update_option('fourier_sara_event_memory_schema_version', '2.0.0');
 }
 
 /* ---------------------------------------------------------- */
@@ -142,6 +230,12 @@ function fourier_sara_event_memory_admin_page() {
     $source_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$sources_table}");
     $event_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$events_table}");
     $experience_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$experiences_table}");
+    $relations_table = $wpdb->prefix . 'sara_relations';
+    $concepts_table = $wpdb->prefix . 'sara_concepts';
+    $priority_table = $wpdb->prefix . 'sara_priority';
+    $relation_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$relations_table}");
+    $concept_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$concepts_table}");
+    $priority_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$priority_table}");
     $latest_events = $wpdb->get_results("SELECT id, event_uid, modality, event_type, symbol, prediction_error, quality_score, created_at FROM {$events_table} ORDER BY id DESC LIMIT 20", ARRAY_A);
     $token = fourier_sara_get_current_user_token();
     $endpoint = esc_url_raw(rest_url('fourier/v1/sara/events'));
@@ -150,7 +244,8 @@ function fourier_sara_event_memory_admin_page() {
     ?>
     <div class="wrap">
         <h1>SARA Event Memory</h1>
-        <p>WordPressをSARA Engine用の海馬相当 Event Memory として使うための管理画面です。SNN本体はここでは動かさず、sparse events / experience records / curriculum manifestを管理・出力します。</p>
+        <p>WordPressをSARA Engine用の海馬相当 Event Memory として使うための管理画面です。SNN本体はここでは動かさず、sparse events / experience records / relation graph / concept crystals / curriculum manifestを管理・出力します。</p>
+        <p><strong>研究モード:</strong> SNN-only / ANN-assisted / Hybrid の候補イベントを同じEvent Memoryへ保存し、<code>proposal_source</code> と <code>verification_state</code> で比較・検証します。WordPressは正解判定器ではなく、候補・証拠・検証状態・履歴を保存する層です。</p>
 
         <h2>概要</h2>
         <table class="widefat striped" style="max-width: 760px;">
@@ -158,6 +253,9 @@ function fourier_sara_event_memory_admin_page() {
                 <tr><th>Sources</th><td><?php echo esc_html($source_count); ?></td></tr>
                 <tr><th>Events</th><td><?php echo esc_html($event_count); ?></td></tr>
                 <tr><th>Experiences</th><td><?php echo esc_html($experience_count); ?></td></tr>
+                <tr><th>Relations</th><td><?php echo esc_html($relation_count); ?></td></tr>
+                <tr><th>Concept Crystals</th><td><?php echo esc_html($concept_count); ?></td></tr>
+                <tr><th>Priority Queue</th><td><?php echo esc_html($priority_count); ?></td></tr>
                 <tr><th>Events API</th><td><code><?php echo esc_html($endpoint); ?></code></td></tr>
                 <tr><th>JSONL Export</th><td><code><?php echo esc_html($jsonl_endpoint); ?></code></td></tr>
             </tbody>
@@ -243,6 +341,46 @@ function fourier_sara_register_rest_routes() {
         [
             'methods' => 'POST',
             'callback' => 'fourier_sara_rest_upsert_experience',
+            'permission_callback' => 'fourier_sara_rest_permission_check',
+        ],
+    ]);
+
+
+    register_rest_route('fourier/v1', '/sara/relations', [
+        [
+            'methods' => 'GET',
+            'callback' => 'fourier_sara_rest_get_relations',
+            'permission_callback' => 'fourier_sara_rest_permission_check',
+        ],
+        [
+            'methods' => 'POST',
+            'callback' => 'fourier_sara_rest_upsert_relation',
+            'permission_callback' => 'fourier_sara_rest_permission_check',
+        ],
+    ]);
+
+    register_rest_route('fourier/v1', '/sara/concepts', [
+        [
+            'methods' => 'GET',
+            'callback' => 'fourier_sara_rest_get_concepts',
+            'permission_callback' => 'fourier_sara_rest_permission_check',
+        ],
+        [
+            'methods' => 'POST',
+            'callback' => 'fourier_sara_rest_upsert_concept',
+            'permission_callback' => 'fourier_sara_rest_permission_check',
+        ],
+    ]);
+
+    register_rest_route('fourier/v1', '/sara/priority', [
+        [
+            'methods' => 'GET',
+            'callback' => 'fourier_sara_rest_get_priority',
+            'permission_callback' => 'fourier_sara_rest_permission_check',
+        ],
+        [
+            'methods' => 'POST',
+            'callback' => 'fourier_sara_rest_upsert_priority',
             'permission_callback' => 'fourier_sara_rest_permission_check',
         ],
     ]);
@@ -399,6 +537,17 @@ function fourier_sara_insert_event($item) {
         'prediction_error' => fourier_sara_float($item['prediction_error'] ?? 0),
         'confidence' => fourier_sara_clamp(fourier_sara_float($item['confidence'] ?? 1), 0, 1),
         'quality_score' => fourier_sara_clamp(fourier_sara_float($item['quality_score'] ?? 0.5), 0, 1),
+        'proposal_source' => fourier_sara_clean_proposal_source($item['proposal_source'] ?? 'manual'),
+        'extractor_name' => sanitize_text_field($item['extractor_name'] ?? ''),
+        'extractor_version' => sanitize_text_field($item['extractor_version'] ?? ''),
+        'verification_state' => fourier_sara_clean_verification_state($item['verification_state'] ?? 'unverified'),
+        'evidence_type' => sanitize_key($item['evidence_type'] ?? 'candidate'),
+        'source_hash' => sanitize_text_field($item['source_hash'] ?? ''),
+        'event_cost' => max(0.0, fourier_sara_float($item['event_cost'] ?? 1)),
+        'novelty' => fourier_sara_clamp(fourier_sara_float($item['novelty'] ?? 0), 0, 1),
+        'redundancy' => fourier_sara_clamp(fourier_sara_float($item['redundancy'] ?? 0), 0, 1),
+        'coverage' => fourier_sara_clamp(fourier_sara_float($item['coverage'] ?? 0), 0, 1),
+        'priority_score' => fourier_sara_calculate_priority($item),
         'tags' => sanitize_text_field(fourier_sara_tags_to_string($item['tags'] ?? '')),
         'created_at' => current_time('mysql'),
     ];
@@ -474,6 +623,153 @@ function fourier_sara_rest_upsert_experience($request) {
     return rest_ensure_response(['id' => $id, 'experience_uid' => $experience_uid, 'updated' => $updated]);
 }
 
+
+/* ---------------------------------------------------------- */
+/* -------- REST: Relation / Concept / Priority操作 ---------- */
+/* ---------------------------------------------------------- */
+
+function fourier_sara_rest_get_relations($request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'sara_relations';
+    $limit = max(1, min(2000, (int) ($request->get_param('limit') ?: 200)));
+    $verification_state = sanitize_key($request->get_param('verification_state') ?: '');
+
+    if ($verification_state !== '') {
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} WHERE verification_state = %s ORDER BY id DESC LIMIT %d", $verification_state, $limit), ARRAY_A);
+    } else {
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} ORDER BY id DESC LIMIT %d", $limit), ARRAY_A);
+    }
+
+    return rest_ensure_response(array_map('fourier_sara_decode_relation_row', $rows));
+}
+
+function fourier_sara_rest_upsert_relation($request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'sara_relations';
+    $body = fourier_sara_get_json_body($request);
+
+    $relation_uid = fourier_sara_clean_uid($body['relation_uid'] ?? ('relation_' . wp_generate_uuid4()));
+    $existing_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE relation_uid = %s", $relation_uid));
+
+    $data = [
+        'relation_uid' => $relation_uid,
+        'source_event_uid' => fourier_sara_clean_uid($body['source_event_uid'] ?? ''),
+        'relation_type' => sanitize_key($body['relation_type'] ?? 'predicts'),
+        'target_event_uid' => fourier_sara_clean_uid($body['target_event_uid'] ?? ''),
+        'min_delay_ms' => fourier_sara_float($body['min_delay_ms'] ?? 0),
+        'max_delay_ms' => fourier_sara_float($body['max_delay_ms'] ?? 0),
+        'confidence' => fourier_sara_clamp(fourier_sara_float($body['confidence'] ?? 0.5), 0, 1),
+        'evidence_count' => max(0, (int) ($body['evidence_count'] ?? 0)),
+        'counterexample_count' => max(0, (int) ($body['counterexample_count'] ?? 0)),
+        'verification_state' => fourier_sara_clean_verification_state($body['verification_state'] ?? 'unverified'),
+        'proposal_source' => fourier_sara_clean_proposal_source($body['proposal_source'] ?? 'manual'),
+        'payload_json' => fourier_sara_json_encode($body['payload'] ?? []),
+        'expiry' => !empty($body['expiry']) ? sanitize_text_field($body['expiry']) : null,
+        'updated_at' => current_time('mysql'),
+    ];
+
+    if ($data['source_event_uid'] === '' || $data['target_event_uid'] === '') {
+        return new WP_Error('invalid_relation', 'source_event_uid and target_event_uid are required.', ['status' => 400]);
+    }
+
+    if ($existing_id) {
+        $wpdb->update($table, $data, ['id' => (int) $existing_id]);
+        return rest_ensure_response(['id' => (int) $existing_id, 'relation_uid' => $relation_uid, 'updated' => true]);
+    }
+
+    $data['created_at'] = current_time('mysql');
+    $wpdb->insert($table, $data);
+    return rest_ensure_response(['id' => (int) $wpdb->insert_id, 'relation_uid' => $relation_uid, 'updated' => false]);
+}
+
+function fourier_sara_rest_get_concepts($request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'sara_concepts';
+    $limit = max(1, min(2000, (int) ($request->get_param('limit') ?: 200)));
+    $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} ORDER BY utility_score DESC, id DESC LIMIT %d", $limit), ARRAY_A);
+    return rest_ensure_response(array_map('fourier_sara_decode_concept_row', $rows));
+}
+
+function fourier_sara_rest_upsert_concept($request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'sara_concepts';
+    $body = fourier_sara_get_json_body($request);
+
+    $concept_uid = fourier_sara_clean_uid($body['concept_uid'] ?? ('concept_' . wp_generate_uuid4()));
+    $existing_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE concept_uid = %s", $concept_uid));
+
+    $data = [
+        'concept_uid' => $concept_uid,
+        'label' => sanitize_text_field($body['label'] ?? ''),
+        'concept_type' => sanitize_key($body['concept_type'] ?? 'dynamic_mode'),
+        'evidence_count' => max(0, (int) ($body['evidence_count'] ?? 0)),
+        'contradiction_count' => max(0, (int) ($body['contradiction_count'] ?? 0)),
+        'verification_state' => fourier_sara_clean_verification_state($body['verification_state'] ?? 'candidate'),
+        'utility_score' => fourier_sara_float($body['utility_score'] ?? 0),
+        'event_pattern_json' => fourier_sara_json_encode($body['event_pattern'] ?? []),
+        'source_refs_json' => fourier_sara_json_encode($body['source_refs'] ?? []),
+        'payload_json' => fourier_sara_json_encode($body['payload'] ?? []),
+        'updated_at' => current_time('mysql'),
+    ];
+
+    if ($existing_id) {
+        $wpdb->update($table, $data, ['id' => (int) $existing_id]);
+        return rest_ensure_response(['id' => (int) $existing_id, 'concept_uid' => $concept_uid, 'updated' => true]);
+    }
+
+    $data['created_at'] = current_time('mysql');
+    $wpdb->insert($table, $data);
+    return rest_ensure_response(['id' => (int) $wpdb->insert_id, 'concept_uid' => $concept_uid, 'updated' => false]);
+}
+
+function fourier_sara_rest_get_priority($request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'sara_priority';
+    $limit = max(1, min(2000, (int) ($request->get_param('limit') ?: 200)));
+    $status = sanitize_key($request->get_param('status') ?: 'queued');
+    $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} WHERE status = %s ORDER BY priority_score DESC, id ASC LIMIT %d", $status, $limit), ARRAY_A);
+    return rest_ensure_response(array_map('fourier_sara_decode_priority_row', $rows));
+}
+
+function fourier_sara_rest_upsert_priority($request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'sara_priority';
+    $body = fourier_sara_get_json_body($request);
+
+    $item_uid = fourier_sara_clean_uid($body['item_uid'] ?? '');
+    $item_type = sanitize_key($body['item_type'] ?? 'event');
+    if ($item_uid === '') {
+        return new WP_Error('invalid_priority', 'item_uid is required.', ['status' => 400]);
+    }
+
+    $priority_score = isset($body['priority_score']) ? fourier_sara_float($body['priority_score']) : fourier_sara_calculate_priority($body);
+    $existing_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE item_uid = %s AND item_type = %s", $item_uid, $item_type));
+
+    $data = [
+        'item_uid' => $item_uid,
+        'item_type' => $item_type,
+        'priority_score' => $priority_score,
+        'prediction_error' => fourier_sara_clamp(fourier_sara_float($body['prediction_error'] ?? 0), 0, 1),
+        'novelty' => fourier_sara_clamp(fourier_sara_float($body['novelty'] ?? 0), 0, 1),
+        'reward' => fourier_sara_float($body['reward'] ?? 0),
+        'coverage' => fourier_sara_clamp(fourier_sara_float($body['coverage'] ?? 0), 0, 1),
+        'redundancy' => fourier_sara_clamp(fourier_sara_float($body['redundancy'] ?? 0), 0, 1),
+        'reason_json' => fourier_sara_json_encode($body['reason'] ?? []),
+        'status' => sanitize_key($body['status'] ?? 'queued'),
+        'updated_at' => current_time('mysql'),
+    ];
+
+    if ($existing_id) {
+        $wpdb->update($table, $data, ['id' => (int) $existing_id]);
+        return rest_ensure_response(['id' => (int) $existing_id, 'item_uid' => $item_uid, 'updated' => true]);
+    }
+
+    $data['created_at'] = current_time('mysql');
+    $wpdb->insert($table, $data);
+    return rest_ensure_response(['id' => (int) $wpdb->insert_id, 'item_uid' => $item_uid, 'updated' => false]);
+}
+
+
 /* ---------------------------------------------------------- */
 /* ------------------- REST: Text to Events ------------------ */
 /* ---------------------------------------------------------- */
@@ -542,7 +838,16 @@ function fourier_sara_text_to_relative_events($text, $options = []) {
             'prediction_error' => 0.0,
             'confidence' => 1.0,
             'quality_score' => 0.7,
-            'tags' => ['text', 'relative_time', 'sara'],
+            'proposal_source' => 'signal_processing',
+            'extractor_name' => 'fourier_sara_text_to_relative_events',
+            'extractor_version' => '2.0.0',
+            'verification_state' => 'observed',
+            'evidence_type' => 'observed_text',
+            'event_cost' => 1.0,
+            'novelty' => 0.0,
+            'redundancy' => 0.0,
+            'coverage' => 0.5,
+            'tags' => ['text', 'relative_time', 'sara', 'snn_only_compatible'],
         ];
         $previous_symbol = $char;
         $index++;
@@ -658,6 +963,17 @@ function fourier_sara_decode_event_row($row) {
         'prediction_error' => (float) $row['prediction_error'],
         'confidence' => (float) $row['confidence'],
         'quality_score' => (float) $row['quality_score'],
+        'proposal_source' => $row['proposal_source'] ?? 'manual',
+        'extractor_name' => $row['extractor_name'] ?? '',
+        'extractor_version' => $row['extractor_version'] ?? '',
+        'verification_state' => $row['verification_state'] ?? 'unverified',
+        'evidence_type' => $row['evidence_type'] ?? 'candidate',
+        'source_hash' => $row['source_hash'] ?? '',
+        'event_cost' => isset($row['event_cost']) ? (float) $row['event_cost'] : 1.0,
+        'novelty' => isset($row['novelty']) ? (float) $row['novelty'] : 0.0,
+        'redundancy' => isset($row['redundancy']) ? (float) $row['redundancy'] : 0.0,
+        'coverage' => isset($row['coverage']) ? (float) $row['coverage'] : 0.0,
+        'priority_score' => isset($row['priority_score']) ? (float) $row['priority_score'] : 0.0,
         'tags' => fourier_sara_string_to_tags($row['tags']),
         'created_at' => $row['created_at'],
     ];
@@ -682,6 +998,65 @@ function fourier_sara_decode_experience_row($row) {
         'updated_at' => $row['updated_at'],
     ];
 }
+
+
+function fourier_sara_decode_relation_row($row) {
+    return [
+        'id' => (int) $row['id'],
+        'relation_uid' => $row['relation_uid'],
+        'source_event_uid' => $row['source_event_uid'],
+        'relation_type' => $row['relation_type'],
+        'target_event_uid' => $row['target_event_uid'],
+        'min_delay_ms' => (float) $row['min_delay_ms'],
+        'max_delay_ms' => (float) $row['max_delay_ms'],
+        'confidence' => (float) $row['confidence'],
+        'evidence_count' => (int) $row['evidence_count'],
+        'counterexample_count' => (int) $row['counterexample_count'],
+        'verification_state' => $row['verification_state'],
+        'proposal_source' => $row['proposal_source'],
+        'payload' => fourier_sara_json_decode($row['payload_json']),
+        'expiry' => $row['expiry'],
+        'created_at' => $row['created_at'],
+        'updated_at' => $row['updated_at'],
+    ];
+}
+
+function fourier_sara_decode_concept_row($row) {
+    return [
+        'id' => (int) $row['id'],
+        'concept_uid' => $row['concept_uid'],
+        'label' => $row['label'],
+        'concept_type' => $row['concept_type'],
+        'evidence_count' => (int) $row['evidence_count'],
+        'contradiction_count' => (int) $row['contradiction_count'],
+        'verification_state' => $row['verification_state'],
+        'utility_score' => (float) $row['utility_score'],
+        'event_pattern' => fourier_sara_json_decode($row['event_pattern_json']),
+        'source_refs' => fourier_sara_json_decode($row['source_refs_json']),
+        'payload' => fourier_sara_json_decode($row['payload_json']),
+        'created_at' => $row['created_at'],
+        'updated_at' => $row['updated_at'],
+    ];
+}
+
+function fourier_sara_decode_priority_row($row) {
+    return [
+        'id' => (int) $row['id'],
+        'item_uid' => $row['item_uid'],
+        'item_type' => $row['item_type'],
+        'priority_score' => (float) $row['priority_score'],
+        'prediction_error' => (float) $row['prediction_error'],
+        'novelty' => (float) $row['novelty'],
+        'reward' => (float) $row['reward'],
+        'coverage' => (float) $row['coverage'],
+        'redundancy' => (float) $row['redundancy'],
+        'reason' => fourier_sara_json_decode($row['reason_json']),
+        'status' => $row['status'],
+        'created_at' => $row['created_at'],
+        'updated_at' => $row['updated_at'],
+    ];
+}
+
 
 /* ---------------------------------------------------------- */
 /* ------------------------- 汎用補助 ------------------------- */
@@ -738,3 +1113,29 @@ function fourier_sara_string_to_tags($tags) {
     $items = array_filter(array_map('trim', explode(',', (string) $tags)));
     return array_values($items);
 }
+
+
+function fourier_sara_clean_proposal_source($value) {
+    $value = sanitize_key((string) $value);
+    $allowed = ['manual', 'snn', 'ann', 'hybrid', 'signal_processing', 'rule', 'import'];
+    return in_array($value, $allowed, true) ? $value : 'manual';
+}
+
+function fourier_sara_clean_verification_state($value) {
+    $value = sanitize_key((string) $value);
+    $allowed = ['observed', 'unverified', 'candidate', 'provisional', 'verified', 'contradicted', 'quarantined', 'rejected'];
+    return in_array($value, $allowed, true) ? $value : 'unverified';
+}
+
+function fourier_sara_calculate_priority($item) {
+    $prediction_error = fourier_sara_clamp(fourier_sara_float($item['prediction_error'] ?? 0), 0, 1);
+    $novelty = fourier_sara_clamp(fourier_sara_float($item['novelty'] ?? 0), 0, 1);
+    $reward = fourier_sara_clamp(abs(fourier_sara_float($item['reward'] ?? 0)), 0, 1);
+    $coverage = fourier_sara_clamp(fourier_sara_float($item['coverage'] ?? 0), 0, 1);
+    $redundancy = fourier_sara_clamp(fourier_sara_float($item['redundancy'] ?? 0), 0, 1);
+    $event_cost = max(0.01, fourier_sara_float($item['event_cost'] ?? 1));
+
+    $score = ($prediction_error * 0.32) + ($novelty * 0.22) + ($reward * 0.18) + ($coverage * 0.18) - ($redundancy * 0.20);
+    return round($score / sqrt($event_cost), 6);
+}
+
