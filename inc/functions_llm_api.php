@@ -390,7 +390,7 @@ function llm_api_call_ollama($base_url, $model, $system, $user)
     ];
 
     $response = wp_remote_post($url, [
-        'timeout' => 120, // ローカルは時間がかかる場合がある
+        'timeout' => 900, // ローカルは非常に時間がかかる場合があるため15分に設定 // ローカルは時間がかかる場合があるため長めに設定
         'headers' => [
             'Content-Type' => 'application/json'
         ],

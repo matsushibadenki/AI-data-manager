@@ -603,7 +603,7 @@ button.btn-black span.material-symbols-outlined {
             
             if (window.statusTimeout) clearTimeout(window.statusTimeout);
             
-            if (!message.includes('数分かかる場合があります')) {
+            if (!message.includes('数分かかる場合があります') && !isError) {
                 window.statusTimeout = setTimeout(() => {
                     statusDiv.style.display = 'none';
                 }, 5000);
