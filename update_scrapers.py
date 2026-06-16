@@ -175,19 +175,19 @@ new_scrape_handler = '''function frontend_learning_data_scrape_url_handler() {
         switch ($provider) {
             case 'openai':
                 $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
                 if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'gemini':
                 $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
                 if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'ollama':
                 $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
                 $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
                 break;
             case 'custom':
@@ -330,19 +330,19 @@ new_distill_seed_handler = '''function frontend_learning_data_distill_from_seed_
         switch ($provider) {
             case 'openai':
                 $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
                 if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'gemini':
                 $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
                 if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'ollama':
                 $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
                 $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
                 break;
             case 'custom':
@@ -476,19 +476,19 @@ new_distill_handler = '''function frontend_learning_data_distill_handler() {
         switch ($provider) {
             case 'openai':
                 $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
                 if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'gemini':
                 $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
                 if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'ollama':
                 $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
                 $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
                 break;
             case 'custom':
@@ -566,4 +566,3 @@ content = re.sub(
 
 with open('inc/functions_llm_api.php', 'w') as f:
     f.write(content)
-

@@ -11,7 +11,8 @@ if (!defined('ABSPATH')) {
 add_action('wp_ajax_frontend_learning_data_generate_variation', 'frontend_learning_data_generate_variation_handler');
 add_action('wp_ajax_nopriv_frontend_learning_data_generate_variation', 'frontend_learning_data_generate_variation_handler');
 
-function frontend_learning_data_generate_variation_handler() {
+function frontend_learning_data_generate_variation_handler()
+{
     if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'learning_data_action')) {
         wp_send_json_error(['message' => esc_html__('セッションが無効です。', 'fourier')]);
     }
@@ -55,21 +56,21 @@ function frontend_learning_data_generate_variation_handler() {
         switch ($provider) {
             case 'openai':
                 $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
                 if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
                 $generated_variations = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
                 break;
 
             case 'gemini':
                 $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
                 if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
                 $generated_variations = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
                 break;
 
             case 'ollama':
                 $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
                 $generated_variations = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
                 break;
 
@@ -126,7 +127,8 @@ function frontend_learning_data_generate_variation_handler() {
 add_action('wp_ajax_frontend_learning_data_distill', 'frontend_learning_data_distill_handler');
 add_action('wp_ajax_nopriv_frontend_learning_data_distill', 'frontend_learning_data_distill_handler');
 
-function frontend_learning_data_distill_handler() {
+function frontend_learning_data_distill_handler()
+{
     if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'learning_data_action')) {
         wp_send_json_error(['message' => esc_html__('セッションが無効です。', 'fourier')]);
     }
@@ -159,7 +161,7 @@ function frontend_learning_data_distill_handler() {
     $system_prompt .= "【重要要件】\n";
     $system_prompt .= "1. 出力は必ずJSON形式のみとしてください。\n";
     $system_prompt .= "2. 最終的な結果を生成する前に、必ず内部的な推論・自己評価を `\"draft_thought\"` というキーに出力し、その後に実際のデータを `\"data\"` キー内に配列として配置してください。\n";
-    
+
     $user_prompt = "元のフォーマット: {$format}\n元のデータ:\n{$data_to_distill}\n\n";
 
     $target_format = $format;
@@ -187,19 +189,19 @@ function frontend_learning_data_distill_handler() {
         switch ($provider) {
             case 'openai':
                 $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
                 if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'gemini':
                 $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
                 if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'ollama':
                 $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
                 $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
                 break;
             case 'custom':
@@ -272,7 +274,8 @@ function frontend_learning_data_distill_handler() {
 // APIリクエストラッパー関数群
 // ------------------------------------------------------------------
 
-function _parse_json_from_llm_response($text) {
+function _parse_json_from_llm_response($text)
+{
     // マークダウンのコードブロック(```json ... ```)を取り除く
     $text = preg_replace('/^```json\s*/m', '', $text);
     $text = preg_replace('/```$/m', '', $text);
@@ -283,7 +286,7 @@ function _parse_json_from_llm_response($text) {
     if (json_last_error() === JSON_ERROR_NONE) {
         return wp_is_numeric_array($decoded) ? $decoded : [$decoded]; // 配列に強制
     }
-    
+
     // パース失敗時、配列の開始部分を強引に探す
     $start = strpos($text, '[');
     $end = strrpos($text, ']');
@@ -294,11 +297,12 @@ function _parse_json_from_llm_response($text) {
             return $decoded;
         }
     }
-    
+
     throw new Exception("LLMの応答からJSONをパースできませんでした。");
 }
 
-function llm_api_call_openai($api_key, $model, $system, $user) {
+function llm_api_call_openai($api_key, $model, $system, $user)
+{
     $url = 'https://api.openai.com/v1/chat/completions';
     $body = [
         'model' => $model,
@@ -337,16 +341,17 @@ function llm_api_call_openai($api_key, $model, $system, $user) {
     return _parse_json_from_llm_response($content);
 }
 
-function llm_api_call_gemini($api_key, $model, $system, $user) {
+function llm_api_call_gemini($api_key, $model, $system, $user)
+{
     $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$api_key}";
     $body = [
         'system_instruction' => [
-            'parts' => [ ['text' => $system] ]
+            'parts' => [['text' => $system]]
         ],
         'contents' => [
             [
                 'role' => 'user',
-                'parts' => [ ['text' => $user] ]
+                'parts' => [['text' => $user]]
             ]
         ],
         'generationConfig' => [
@@ -375,7 +380,8 @@ function llm_api_call_gemini($api_key, $model, $system, $user) {
     return _parse_json_from_llm_response($content);
 }
 
-function llm_api_call_ollama($base_url, $model, $system, $user) {
+function llm_api_call_ollama($base_url, $model, $system, $user)
+{
     $url = rtrim($base_url, '/') . '/api/chat';
     $body = [
         'model' => $model,
@@ -412,7 +418,8 @@ function llm_api_call_ollama($base_url, $model, $system, $user) {
     return $parsed;
 }
 
-function llm_api_call_custom($base_url, $model, $system, $user) {
+function llm_api_call_custom($base_url, $model, $system, $user)
+{
     $url = rtrim($base_url, '/') . '/chat/completions';
     $body = [
         'messages' => [
@@ -451,7 +458,8 @@ function llm_api_call_custom($base_url, $model, $system, $user) {
 add_action('wp_ajax_frontend_learning_data_scrape_url', 'frontend_learning_data_scrape_url_handler');
 add_action('wp_ajax_nopriv_frontend_learning_data_scrape_url', 'frontend_learning_data_scrape_url_handler');
 
-function frontend_learning_data_scrape_url_handler() {
+function frontend_learning_data_scrape_url_handler()
+{
     if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'learning_data_action')) {
         wp_send_json_error(['message' => esc_html__('セッションが無効です。', 'fourier')]);
     }
@@ -619,19 +627,19 @@ function frontend_learning_data_scrape_url_handler() {
         switch ($provider) {
             case 'openai':
                 $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
                 if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'gemini':
                 $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
                 if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'ollama':
                 $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
                 $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
                 break;
             case 'custom':
@@ -699,7 +707,8 @@ function frontend_learning_data_scrape_url_handler() {
 add_action('wp_ajax_frontend_learning_data_distill_from_seed', 'frontend_learning_data_distill_from_seed_handler');
 add_action('wp_ajax_nopriv_frontend_learning_data_distill_from_seed', 'frontend_learning_data_distill_from_seed_handler');
 
-function frontend_learning_data_distill_from_seed_handler() {
+function frontend_learning_data_distill_from_seed_handler()
+{
     if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'learning_data_action')) {
         wp_send_json_error(['message' => esc_html__('セッションが無効です。', 'fourier')]);
     }
@@ -768,19 +777,19 @@ function frontend_learning_data_distill_from_seed_handler() {
         switch ($provider) {
             case 'openai':
                 $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
                 if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'gemini':
                 $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
                 if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
                 $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'ollama':
                 $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
                 $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
                 break;
             case 'custom':
@@ -840,4 +849,58 @@ function frontend_learning_data_distill_from_seed_handler() {
     }
 
     wp_send_json_success(['post_id' => $post_id]);
+}
+
+// --- 新規：LLM接続確認用API ---
+add_action('wp_ajax_test_llm_connection', 'test_llm_connection_handler');
+function test_llm_connection_handler()
+{
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'test_llm_connection_action')) {
+        wp_send_json_error(['message' => 'セッションが無効です。']);
+    }
+
+    $provider = isset($_POST['provider']) ? sanitize_text_field($_POST['provider']) : '';
+
+    $system_prompt = "You are a helpful assistant.";
+    $user_prompt = "Reply with exactly one word: OK";
+
+    $response_text = "";
+    try {
+        switch ($provider) {
+            case 'openai':
+                $api_key = isset($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
+                $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : 'gpt-5.5';
+                if (!$api_key) throw new Exception("API Keyが空です。");
+                $response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
+                break;
+            case 'gemini':
+                $api_key = isset($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
+                $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : 'gemini-3.1-pro-preview';
+                if (!$api_key) throw new Exception("API Keyが空です。");
+                $response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
+                break;
+            case 'ollama':
+                $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : 'http://127.0.0.1:11434';
+                $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : 'gemma4:12b-mlx';
+                if (!$url) throw new Exception("URLが空です。");
+                $response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
+                break;
+            case 'custom':
+                $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : 'http://127.0.0.1:8080/v1';
+                $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : '';
+                if (!$url) throw new Exception("URLが空です。");
+                $response_text = llm_api_call_custom($url, $model, $system_prompt, $user_prompt);
+                break;
+            default:
+                throw new Exception("不明なプロバイダです。");
+        }
+
+        if (empty($response_text)) {
+            throw new Exception("空の応答が返されました。");
+        }
+
+        wp_send_json_success(['message' => '接続成功！ (応答: ' . esc_html(mb_substr($response_text, 0, 30)) . ')']);
+    } catch (Exception $e) {
+        wp_send_json_error(['message' => '接続失敗: ' . $e->getMessage()]);
+    }
 }

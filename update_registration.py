@@ -51,7 +51,7 @@ tab_content_replacement = tab_content_target + '''
                     <div class="upload-form-group" style="margin-top: 1rem;">
                         <label for="distill-provider"><?php echo esc_html__('教師モデル (LLMプロバイダ):', 'fourier'); ?></label>
                         <select id="distill-provider" class="upload-form-input">
-                            <option value="openai">OpenAI (推奨: GPT-4o等)</option>
+                            <option value="openai">OpenAI (推奨: gpt-5.5等)</option>
                             <option value="gemini">Google Gemini</option>
                             <option value="ollama">Ollama (ローカルサーバー)</option>
                             <option value="custom">Custom (Llama.cpp等)</option>

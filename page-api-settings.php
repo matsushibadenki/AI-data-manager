@@ -19,11 +19,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_api_settings']))
         // OpenAI
         update_user_meta($current_user_id, 'llm_openai_api_key', sanitize_text_field($_POST['openai_api_key']));
         update_user_meta($current_user_id, 'llm_openai_model', sanitize_text_field($_POST['openai_model']));
-        
+
         // Gemini
         update_user_meta($current_user_id, 'llm_gemini_api_key', sanitize_text_field($_POST['gemini_api_key']));
         update_user_meta($current_user_id, 'llm_gemini_model', sanitize_text_field($_POST['gemini_model']));
-        
+
         // Ollama
         update_user_meta($current_user_id, 'llm_ollama_url', sanitize_url($_POST['ollama_url']));
         update_user_meta($current_user_id, 'llm_ollama_model', sanitize_text_field($_POST['ollama_model']));
@@ -45,13 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_api_settings']))
 
 // 現在の値を取得
 $openai_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-$openai_mod = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o';
+$openai_mod = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
 
 $gemini_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-$gemini_mod = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-pro-latest';
+$gemini_mod = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
 
 $ollama_url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-$ollama_mod = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'llama3';
+$ollama_mod = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
 
 $custom_url = get_user_meta($current_user_id, 'llm_custom_url', true) ?: 'http://127.0.0.1:8080/v1';
 $custom_mod = get_user_meta($current_user_id, 'llm_custom_model', true) ?: '';
@@ -67,71 +67,80 @@ get_header();
 ?>
 
 <style>
-.settings-container {
-    max-width: 800px;
-    margin: 3rem auto;
-    padding: 0 1rem;
-    font-family: var(--font-primary, 'Inter', 'Noto Sans JP', sans-serif);
-}
-.settings-card {
-    background: var(--bg-surface, #fff);
-    padding: 2.5rem;
-    border-radius: var(--radius-lg, 8px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    border: 1px solid var(--border-subtle, #eee);
-    margin-bottom: 2rem;
-}
-.settings-card h2 {
-    margin-top: 0;
-    margin-bottom: 1.5rem;
-    font-size: 1.5rem;
-    border-bottom: 2px solid var(--border-subtle, #eee);
-    padding-bottom: 0.5rem;
-    color: var(--text-primary, #111);
-}
-.form-group {
-    margin-bottom: 1.5rem;
-}
-.form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-    color: var(--text-primary, #333);
-}
-.form-group input[type="text"],
-.form-group input[type="password"],
-.form-group input[type="url"] {
-    width: 100%;
-    padding: 0.8rem;
-    border: 1px solid var(--border-subtle, #ccc);
-    border-radius: 4px;
-    box-sizing: border-box;
-    font-size: 1rem;
-}
-.form-group input:focus {
-    border-color: var(--accent, #C9A96E);
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(201, 169, 110, 0.2);
-}
-.btn-save {
-    background-color: var(--text-primary, #111);
-    color: #fff;
-    border: none;
-    padding: 0.8rem 2rem;
-    font-size: 1rem;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: opacity 0.2s;
-    font-weight: 600;
-}
-.btn-save:hover {
-    opacity: 0.8;
-}
-.help-text {
-    font-size: 0.85rem;
-    color: var(--text-secondary, #666);
-    margin-top: 0.4rem;
-}
+    .settings-container {
+        max-width: 800px;
+        margin: 3rem auto;
+        padding: 0 1rem;
+        font-family: var(--font-primary, 'Inter', 'Noto Sans JP', sans-serif);
+    }
+
+    .settings-card {
+        background: var(--bg-surface, #fff);
+        padding: 2.5rem;
+        border-radius: var(--radius-lg, 8px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        border: 1px solid var(--border-subtle, #eee);
+        margin-bottom: 2rem;
+    }
+
+    .settings-card h2 {
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+        font-size: 1.5rem;
+        border-bottom: 2px solid var(--border-subtle, #eee);
+        padding-bottom: 0.5rem;
+        color: var(--text-primary, #111);
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--text-primary, #333);
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="password"],
+    .form-group input[type="url"] {
+        width: 100%;
+        padding: 0.8rem;
+        border: 1px solid var(--border-subtle, #ccc);
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-size: 1rem;
+    }
+
+    .form-group input:focus {
+        border-color: var(--accent, #C9A96E);
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(201, 169, 110, 0.2);
+    }
+
+    .btn-save {
+        background-color: var(--text-primary, #111);
+        color: #fff;
+        border: none;
+        padding: 0.8rem 2rem;
+        font-size: 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: opacity 0.2s;
+        font-weight: 600;
+    }
+
+    .btn-save:hover {
+        opacity: 0.8;
+    }
+
+    .help-text {
+        font-size: 0.85rem;
+        color: var(--text-secondary, #666);
+        margin-top: 0.4rem;
+    }
 </style>
 
 <main class="settings-container">
@@ -143,6 +152,7 @@ get_header();
 
     <form method="post" action="">
         <?php wp_nonce_field('save_api_settings_action', 'nonce'); ?>
+        <input type="hidden" id="test-nonce" value="<?php echo wp_create_nonce('test_llm_connection_action'); ?>">
 
         <div class="settings-card">
             <h2>OpenAI API</h2>
@@ -152,7 +162,11 @@ get_header();
             </div>
             <div class="form-group">
                 <label for="openai_model">Default Model</label>
-                <input type="text" id="openai_model" name="openai_model" value="<?php echo esc_attr($openai_mod); ?>" placeholder="gpt-4o, gpt-3.5-turbo">
+                <input type="text" id="openai_model" name="openai_model" value="<?php echo esc_attr($openai_mod); ?>" placeholder="gpt-5.5, gpt-3.5-turbo">
+            </div>
+            <div style="margin-top: 1rem;">
+                <button type="button" class="btn-test-connection" data-provider="openai" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <span class="test-result" id="test-result-openai" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
 
@@ -164,7 +178,11 @@ get_header();
             </div>
             <div class="form-group">
                 <label for="gemini_model">Default Model</label>
-                <input type="text" id="gemini_model" name="gemini_model" value="<?php echo esc_attr($gemini_mod); ?>" placeholder="gemini-1.5-pro-latest">
+                <input type="text" id="gemini_model" name="gemini_model" value="<?php echo esc_attr($gemini_mod); ?>" placeholder="gemini-3.1-pro-preview">
+            </div>
+            <div style="margin-top: 1rem;">
+                <button type="button" class="btn-test-connection" data-provider="gemini" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <span class="test-result" id="test-result-gemini" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
 
@@ -177,7 +195,11 @@ get_header();
             </div>
             <div class="form-group">
                 <label for="ollama_model">Default Model</label>
-                <input type="text" id="ollama_model" name="ollama_model" value="<?php echo esc_attr($ollama_mod); ?>" placeholder="llama3, gemma, etc.">
+                <input type="text" id="ollama_model" name="ollama_model" value="<?php echo esc_attr($ollama_mod); ?>" placeholder="gemma4:12b-mlx, gemma, etc.">
+            </div>
+            <div style="margin-top: 1rem;">
+                <button type="button" class="btn-test-connection" data-provider="ollama" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <span class="test-result" id="test-result-ollama" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
 
@@ -191,6 +213,10 @@ get_header();
             <div class="form-group">
                 <label for="custom_model">Model Name (optional)</label>
                 <input type="text" id="custom_model" name="custom_model" value="<?php echo esc_attr($custom_mod); ?>" placeholder="モデル名（サーバー側で固定の場合は空でも可）">
+            </div>
+            <div style="margin-top: 1rem;">
+                <button type="button" class="btn-test-connection" data-provider="custom" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <span class="test-result" id="test-result-custom" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
 
@@ -213,5 +239,70 @@ get_header();
     </form>
 
 </main>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ajaxUrl = "<?php echo esc_url(admin_url('admin-ajax.php')); ?>";
+        const testNonce = document.getElementById('test-nonce').value;
+
+        document.querySelectorAll('.btn-test-connection').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const provider = this.getAttribute('data-provider');
+                const resultSpan = document.getElementById('test-result-' + provider);
+
+                let apiKey = '',
+                    url = '',
+                    model = '';
+
+                if (provider === 'openai') {
+                    apiKey = document.getElementById('openai_api_key').value;
+                    model = document.getElementById('openai_model').value;
+                } else if (provider === 'gemini') {
+                    apiKey = document.getElementById('gemini_api_key').value;
+                    model = document.getElementById('gemini_model').value;
+                } else if (provider === 'ollama') {
+                    url = document.getElementById('ollama_url').value;
+                    model = document.getElementById('ollama_model').value;
+                } else if (provider === 'custom') {
+                    url = document.getElementById('custom_url').value;
+                    model = document.getElementById('custom_model').value;
+                }
+
+                resultSpan.textContent = "確認中...";
+                resultSpan.style.color = "#666";
+                this.disabled = true;
+
+                const formData = new FormData();
+                formData.append('action', 'test_llm_connection');
+                formData.append('nonce', testNonce);
+                formData.append('provider', provider);
+                formData.append('api_key', apiKey);
+                formData.append('url', url);
+                formData.append('model', model);
+
+                fetch(ajaxUrl, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        this.disabled = false;
+                        if (data.success) {
+                            resultSpan.textContent = data.data.message;
+                            resultSpan.style.color = "green";
+                        } else {
+                            resultSpan.textContent = data.data.message;
+                            resultSpan.style.color = "red";
+                        }
+                    })
+                    .catch(err => {
+                        this.disabled = false;
+                        resultSpan.textContent = "通信エラーが発生しました。";
+                        resultSpan.style.color = "red";
+                    });
+            });
+        });
+    });
+</script>
 
 <?php get_footer(); ?>

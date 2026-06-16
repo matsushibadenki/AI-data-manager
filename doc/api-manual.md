@@ -76,15 +76,15 @@ else:
 もっとも手軽で高性能なアプローチです。
 - **API Key**: それぞれの公式開発者コンソール（OpenAI Platform / Google AI Studio）から取得したAPIキーを入力します。
 - **Default Model**:
-  - OpenAI 推奨: `gpt-4o`, `gpt-4-turbo`
-  - Gemini 推奨: `gemini-1.5-pro-latest`, `gemini-1.5-flash-latest`
+  - OpenAI 推奨: `gpt-5.5`, `gpt-4-turbo`
+  - Gemini 推奨: `gemini-3.1-pro-preview`, `gemini-1.5-flash-latest`
 
 ### 2.2. ローカルLLM: Ollama
 自分のPCやローカルサーバーでOllamaを立ち上げている場合の設定です。
 - **Endpoint URL**:
   - 基本的には `http://127.0.0.1:11434` です。
   - ※ もしAI Data ManagerをDockerコンテナ内で動かしており、ホストマシンのOllamaへアクセスしたい場合は `http://host.docker.internal:11434` や、マシンのローカルIPを指定してください。
-- **Model Name**: 既に `ollama run <model>` 等でダウンロード済みのモデル名（例: `llama3`, `command-r`）を入力します。
+- **Model Name**: 既に `ollama run <model>` 等でダウンロード済みのモデル名（例: `gemma4:12b-mlx`, `command-r`）を入力します。
 
 ### 2.3. ローカルLLM: Llama.cpp / その他OpenAI互換API
 Llama.cppのサーバーモードや、vLLMなどの「OpenAI互換サーバー」を利用する場合の設定です。
