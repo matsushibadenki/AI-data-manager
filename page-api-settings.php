@@ -190,8 +190,8 @@ get_header();
             <h2>Ollama (ローカルサーバー)</h2>
             <div class="form-group">
                 <label for="ollama_url">Endpoint URL</label>
-                <input type="url" id="ollama_url" name="ollama_url" value="<?php echo esc_attr($ollama_url); ?>" placeholder="http://127.0.0.1:11434">
-                <div class="help-text">Ollamaが稼働しているサーバーのURLを指定します。</div>
+                <input type="url" id="ollama_url" name="ollama_url" value="<?php echo esc_attr($ollama_url); ?>" placeholder="http://host.docker.internal:11434">
+                <div class="help-text">Ollamaが稼働しているサーバーのURLを指定します。<br><span style="color:var(--accent);">※Docker上で動かしている場合、母艦のMac/PCに接続するには <code>http://host.docker.internal:11434</code> を指定してください。</span></div>
             </div>
             <div class="form-group">
                 <label for="ollama_model">Default Model</label>
@@ -207,8 +207,8 @@ get_header();
             <h2>Llama.cpp / OpenAI互換サーバー (ローカル)</h2>
             <div class="form-group">
                 <label for="custom_url">Endpoint Base URL</label>
-                <input type="url" id="custom_url" name="custom_url" value="<?php echo esc_attr($custom_url); ?>" placeholder="http://127.0.0.1:8080/v1">
-                <div class="help-text">Llama.cppのサーバーやvLLMなど、OpenAI互換の/v1エンドポイントURLを指定します。</div>
+                <input type="url" id="custom_url" name="custom_url" value="<?php echo esc_attr($custom_url); ?>" placeholder="http://host.docker.internal:8080/v1">
+                <div class="help-text">Llama.cppのサーバーやvLLMなど、OpenAI互換の/v1エンドポイントURLを指定します。<br><span style="color:var(--accent);">※Docker上で動かしている場合、母艦のMac/PCに接続するには <code>http://host.docker.internal:8080/v1</code> などを指定してください。</span></div>
             </div>
             <div class="form-group">
                 <label for="custom_model">Model Name (optional)</label>
@@ -288,10 +288,10 @@ get_header();
                     .then(data => {
                         this.disabled = false;
                         if (data.success) {
-                            resultSpan.textContent = data.data.message;
+                            resultSpan.textContent = data.data.message + '（※画面下部の「設定を保存」を押して確定してください）';
                             resultSpan.style.color = "green";
                         } else {
-                            resultSpan.textContent = data.data.message;
+                            resultSpan.textContent = data.data.message + '（※画面下部の「設定を保存」を押して確定してください）';
                             resultSpan.style.color = "red";
                         }
                     })

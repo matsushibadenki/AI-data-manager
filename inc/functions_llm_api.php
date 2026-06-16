@@ -220,11 +220,7 @@ function frontend_learning_data_distill_handler()
         wp_send_json_error(['message' => 'LLMから有効な応答が返されませんでした。']);
     }
 
-    $parsed_json = _parse_json_from_llm_response($llm_response_text);
-    if ($parsed_json === null) {
-        wp_send_json_error(['message' => 'LLMからのJSONパースに失敗しました。']);
-    }
-
+    $parsed_json = $llm_response_text; // Already parsed by llm_api_call_*
     $distilled_results = $parsed_json;
     if (is_array($parsed_json) && isset($parsed_json['draft_thought']) && isset($parsed_json['data'])) {
         $distilled_results = $parsed_json['data'];
@@ -658,12 +654,8 @@ function frontend_learning_data_scrape_url_handler()
         wp_send_json_error(['message' => 'LLMから有効な応答が返されませんでした。']);
     }
 
-    // 5. JSONパースとデータ保存
-    $parsed_json = _parse_json_from_llm_response($llm_response_text);
-    if ($parsed_json === null) {
-        wp_send_json_error(['message' => esc_html__('LLMからのJSONパースに失敗しました。', 'fourier')]);
-    }
-
+    // 5. データ保存
+    $parsed_json = $llm_response_text; // Already parsed by llm_api_call_*
     $final_data = $parsed_json;
     if (is_array($parsed_json) && isset($parsed_json['draft_thought']) && isset($parsed_json['data'])) {
         $final_data = $parsed_json['data'];
@@ -808,12 +800,8 @@ function frontend_learning_data_distill_from_seed_handler()
         wp_send_json_error(['message' => 'LLMから有効な応答が返されませんでした。']);
     }
 
-    // 3. JSONパース
-    $parsed_json = _parse_json_from_llm_response($llm_response_text);
-    if ($parsed_json === null) {
-        wp_send_json_error(['message' => esc_html__('LLMからのJSONパースに失敗しました。', 'fourier')]);
-    }
-
+    // 3. パース済みデータ取得
+    $parsed_json = $llm_response_text; // Already parsed by llm_api_call_*
     $final_data = $parsed_json;
     if (is_array($parsed_json) && isset($parsed_json['draft_thought']) && isset($parsed_json['data'])) {
         $final_data = $parsed_json['data'];
@@ -862,44 +850,46 @@ function test_llm_connection_handler()
     $provider = isset($_POST['provider']) ? sanitize_text_field($_POST['provider']) : '';
 
     $system_prompt = "You are a helpful assistant.";
-    $user_prompt = "Reply with exactly one word: OK";
+    $user_prompt = "Reply with exactly this JSON: { \"status\": \"OK\" }";
 
-    $response_text = "";
+    $response_data = "";
     try {
         switch ($provider) {
             case 'openai':
                 $api_key = isset($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
                 $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : 'gpt-5.5';
                 if (!$api_key) throw new Exception("API Keyが空です。");
-                $response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
+                $response_data = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'gemini':
                 $api_key = isset($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
                 $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : 'gemini-3.1-pro-preview';
                 if (!$api_key) throw new Exception("API Keyが空です。");
-                $response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
+                $response_data = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
                 break;
             case 'ollama':
                 $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : 'http://127.0.0.1:11434';
                 $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : 'gemma4:12b-mlx';
                 if (!$url) throw new Exception("URLが空です。");
-                $response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
+                $response_data = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
                 break;
             case 'custom':
                 $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : 'http://127.0.0.1:8080/v1';
                 $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : '';
                 if (!$url) throw new Exception("URLが空です。");
-                $response_text = llm_api_call_custom($url, $model, $system_prompt, $user_prompt);
+                $response_data = llm_api_call_custom($url, $model, $system_prompt, $user_prompt);
                 break;
             default:
                 throw new Exception("不明なプロバイダです。");
         }
 
-        if (empty($response_text)) {
+        if (empty($response_data)) {
             throw new Exception("空の応答が返されました。");
         }
+        
+        $response_str = is_array($response_data) ? wp_json_encode($response_data) : (string)$response_data;
 
-        wp_send_json_success(['message' => '接続成功！ (応答: ' . esc_html(mb_substr($response_text, 0, 30)) . ')']);
+        wp_send_json_success(['message' => '接続成功！ (応答: ' . esc_html(mb_substr($response_str, 0, 50)) . ')']);
     } catch (Exception $e) {
         wp_send_json_error(['message' => '接続失敗: ' . $e->getMessage()]);
     }

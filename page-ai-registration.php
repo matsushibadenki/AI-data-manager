@@ -599,9 +599,15 @@ button.btn-black span.material-symbols-outlined {
             const statusDiv = document.getElementById('status-message');
             statusDiv.textContent = message;
             statusDiv.className = 'status-msg ' + (isError ? 'error' : 'success');
-            setTimeout(() => {
-                statusDiv.style.display = 'none';
-            }, 5000);
+            statusDiv.style.display = 'block';
+            
+            if (window.statusTimeout) clearTimeout(window.statusTimeout);
+            
+            if (!message.includes('数分かかる場合があります')) {
+                window.statusTimeout = setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
         }
 
         // URLスクレイピング処理
