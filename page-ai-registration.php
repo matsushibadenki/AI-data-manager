@@ -1,8 +1,8 @@
 <?php
 /*
- * Name: text-based-learning.php
- * Description: ディープラーニング用テキストデータ登録・管理画面。
- * Template Name: Text Based Learning
+ * Name: page-ai-registration.php
+ * Description: AIを用いた学習データ自動登録・管理画面。
+ * Template Name: AI Registration
  */
 
 // 認証状態の確認
@@ -388,21 +388,8 @@ button.btn-black span.material-symbols-outlined {
 
 
             <div style="margin-bottom: 1.5rem;">
-                <h2 class="upload-title" style="margin-top: 0; margin-bottom: 0.25rem;"><?php echo esc_html__('ディープラーニング用データ管理', 'fourier'); ?></h2>
-                <p class="upload-desc" style="margin-bottom: 0;"><?php echo esc_html__('テキストベースの学習データの登録と検索を行います。', 'fourier'); ?></p>
-            </div>
-
-            <!-- 検索セクション -->
-            <div class="search-section">
-                <h3><?php echo esc_html__('データ検索', 'fourier'); ?></h3>
-                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                    <input type="text" id="search-keyword" class="upload-form-input" placeholder="<?php echo esc_attr__('キーワードを入力...', 'fourier'); ?>" style="flex-grow: 1;" />
-                    <button type="button" id="btn-search" class="btn-black">
-                        <span class="material-symbols-outlined">search</span>
-                        <?php echo esc_html__('検索', 'fourier'); ?>
-                    </button>
-                </div>
-                <div id="search-results" class="search-results-container"></div>
+                <h2 class="upload-title" style="margin-top: 0; margin-bottom: 0.25rem;"><?php echo esc_html__('AIデータ自動登録', 'fourier'); ?></h2>
+                <p class="upload-desc" style="margin-bottom: 0;"><?php echo esc_html__('AIを使った自動データ登録を行います。', 'fourier'); ?></p>
             </div>
 
             <!-- 登録セクション -->
@@ -470,123 +457,20 @@ button.btn-black span.material-symbols-outlined {
                 </details>
 
                 <div class="learning-tabs">
-                    <button type="button" class="learning-tab active" data-target="tab-plain">プレーンテキスト</button>
-                    <button type="button" class="learning-tab" data-target="tab-instruction">Instruction</button>
-                    <button type="button" class="learning-tab" data-target="tab-chatml">ChatML</button>
-                    <button type="button" class="learning-tab" data-target="tab-sharegpt">ShareGPT</button>
-                    <button type="button" class="learning-tab" data-target="tab-cot">CoT (思考過程)</button>
-                    <button type="button" class="learning-tab" data-target="tab-dpo">DPO / RLHF</button>
-                    <button type="button" class="learning-tab" data-target="tab-frontend">HTML/CSS/JS</button>
-                    <button type="button" class="learning-tab" data-target="tab-structured">構造化データ</button>
-                    
+                    <button type="button" class="learning-tab active" data-target="tab-scrape" style="background: var(--accent-subtle, rgba(201,169,110,0.1)); color: var(--accent, #C9A96E); border: 1px solid var(--accent, #C9A96E);">
+                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: -2px;">language</span> URL自動取得
+                    </button>
+                    <button type="button" class="learning-tab" data-target="tab-distillation" style="background: var(--accent-subtle, rgba(201,169,110,0.1)); color: var(--accent, #C9A96E); border: 1px solid var(--accent, #C9A96E);">
+                        <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: -2px;">science</span> データ蒸留生成
+                    </button>
                 </div>
 
-                <!-- 1. プレーンテキスト -->
-                <div id="tab-plain" class="learning-tab-content active" data-format="plain">
+                <!-- URLスクレイピング登録 -->
+                <div id="tab-scrape" class="learning-tab-content active" data-format="scrape">
                     <div class="upload-form-group">
-                        <label for="plain-text"><?php echo esc_html__('テキスト本文:', 'fourier'); ?></label>
-                        <textarea id="plain-text" class="upload-form-input" rows="8" placeholder="事前学習などに用いるプレーンテキストを入力してください。"></textarea>
+                        <label for="scrape-url"><?php echo esc_html__('対象URL (Wikipediaやブログ記事など):', 'fourier'); ?></label>
+                        <input type="url" id="scrape-url" class="upload-form-input" placeholder="https://..." />
                     </div>
-                </div>
-
-                <!-- 2. Instruction形式 -->
-                <div id="tab-instruction" class="learning-tab-content" data-format="instruction">
-                    <div class="upload-form-group">
-                        <label for="inst-instruction"><?php echo esc_html__('Instruction (指示):', 'fourier'); ?></label>
-                        <textarea id="inst-instruction" class="upload-form-input" rows="3" placeholder="タスクの指示を入力"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="inst-input"><?php echo esc_html__('Input (入力/文脈 - オプション):', 'fourier'); ?></label>
-                        <textarea id="inst-input" class="upload-form-input" rows="3" placeholder="指示に対する追加の入力や文脈"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="inst-output"><?php echo esc_html__('Output (出力):', 'fourier'); ?></label>
-                        <textarea id="inst-output" class="upload-form-input" rows="5" placeholder="期待される出力・回答"></textarea>
-                    </div>
-                </div>
-
-                <!-- 3. ChatML形式 -->
-                <div id="tab-chatml" class="learning-tab-content" data-format="chatml">
-                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">System, User, Assistantの対話形式で入力します。</p>
-                    <div id="chatml-container">
-                        <!-- 動的追加行 -->
-                    </div>
-                    <button type="button" id="btn-add-chatml" class="btn-add-row">+ メッセージを追加</button>
-                </div>
-
-                <!-- 4. ShareGPT形式 -->
-                <div id="tab-sharegpt" class="learning-tab-content" data-format="sharegpt">
-                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">human, gptなどのロールで会話を入力します。</p>
-                    <div id="sharegpt-container">
-                        <!-- 動的追加行 -->
-                    </div>
-                    <button type="button" id="btn-add-sharegpt" class="btn-add-row">+ 会話を追加</button>
-                </div>
-
-                <!-- 5. 思考過程(CoT) -->
-                <div id="tab-cot" class="learning-tab-content" data-format="cot">
-                    <div class="upload-form-group">
-                        <label for="cot-question"><?php echo esc_html__('Question (質問):', 'fourier'); ?></label>
-                        <textarea id="cot-question" class="upload-form-input" rows="3" placeholder="解決すべき問題や質問"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="cot-thought"><?php echo esc_html__('Thought (思考過程):', 'fourier'); ?></label>
-                        <textarea id="cot-thought" class="upload-form-input" rows="6" placeholder="問題を解決するためのステップバイステップの推論プロセス"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="cot-answer"><?php echo esc_html__('Answer (最終回答):', 'fourier'); ?></label>
-                        <textarea id="cot-answer" class="upload-form-input" rows="3" placeholder="推論に基づく最終的な回答"></textarea>
-                    </div>
-                </div>
-
-                <!-- 5.5 DPO / RLHF -->
-                <div id="tab-dpo" class="learning-tab-content" data-format="dpo">
-                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">RLHFやDPO学習用に、プロンプトと良い回答/悪い回答のペアを登録します。</p>
-                    <div class="upload-form-group">
-                        <label for="dpo-prompt"><?php echo esc_html__('Prompt (プロンプト/指示):', 'fourier'); ?></label>
-                        <textarea id="dpo-prompt" class="upload-form-input" rows="3" placeholder="ユーザーからのプロンプトやシステム指示を入力"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="dpo-chosen"><?php echo esc_html__('Chosen (良い回答):', 'fourier'); ?></label>
-                        <textarea id="dpo-chosen" class="upload-form-input" rows="4" placeholder="モデルが学習すべき望ましい回答"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="dpo-rejected"><?php echo esc_html__('Rejected (悪い回答):', 'fourier'); ?></label>
-                        <textarea id="dpo-rejected" class="upload-form-input" rows="4" placeholder="モデルに避けさせたい好ましくない回答"></textarea>
-                    </div>
-                </div>
-
-                <!-- 6. フロントエンドコード (HTML/CSS/JS) -->
-                <div id="tab-frontend" class="learning-tab-content" data-format="frontend_code">
-                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">Webフロントエンドのコードスニペットを登録します。</p>
-                    <div class="upload-form-group">
-                        <label for="fe-explanation"><?php echo esc_html__('説明・目的:', 'fourier'); ?></label>
-                        <textarea id="fe-explanation" class="upload-form-input" rows="2" placeholder="コードの目的や動作の説明"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="fe-html"><?php echo esc_html__('HTML:', 'fourier'); ?></label>
-                        <textarea id="fe-html" class="upload-form-input" rows="5" placeholder="<div>...</div>" style="font-family: monospace;"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="fe-css"><?php echo esc_html__('CSS:', 'fourier'); ?></label>
-                        <textarea id="fe-css" class="upload-form-input" rows="5" placeholder=".class { ... }" style="font-family: monospace;"></textarea>
-                    </div>
-                    <div class="upload-form-group">
-                        <label for="fe-js"><?php echo esc_html__('JavaScript:', 'fourier'); ?></label>
-                        <textarea id="fe-js" class="upload-form-input" rows="5" placeholder="console.log('...');" style="font-family: monospace;"></textarea>
-                    </div>
-                </div>
-
-                <!-- 7. 構造化データ -->
-                <div id="tab-structured" class="learning-tab-content" data-format="structured">
-                    <div class="upload-form-group">
-                        <label for="structured-json"><?php echo esc_html__('JSONデータ:', 'fourier'); ?></label>
-                        <textarea id="structured-json" class="upload-form-input" rows="10" placeholder='{"key": "value", ...}' style="font-family: monospace;"></textarea>
-                        <small style="color: var(--text-secondary);">※有効なJSON形式で入力してください。</small>
-                    </div>
-                </div>
-
-                
                     <div class="upload-form-group" style="margin-top: 1rem;">
                         <label for="scrape-target-format"><?php echo esc_html__('生成するデータ形式:', 'fourier'); ?></label>
                         <select id="scrape-target-format" class="upload-form-input">
@@ -617,15 +501,55 @@ button.btn-black span.material-symbols-outlined {
                     </div>
                 </div>
 
+                <!-- 蒸留生成登録 -->
+                <div id="tab-distillation" class="learning-tab-content" data-format="distillation">
+                    <div class="upload-form-group">
+                        <label for="distill-seed"><?php echo esc_html__('シードデータ / トピック:', 'fourier'); ?></label>
+                        <textarea id="distill-seed" class="upload-form-input" rows="4" placeholder="例: 「日本の歴史に関するQAを作成して」「以下のテキストを元に、より詳細な解説を作成して: [テキスト]」"></textarea>
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="distill-method"><?php echo esc_html__('蒸留方式:', 'fourier'); ?></label>
+                        <select id="distill-method" class="upload-form-input">
+                            <option value="self-instruct">Self-Instruct (トピックから多様な指示・回答ペア生成)</option>
+                            <option value="refinement">Refinement (入力データの高品質化・詳細化)</option>
+                            <option value="cot">CoT Generation (論理的思考プロセスの付加)</option>
+                            <option value="backtranslation">Backtranslation (回答から最適なプロンプトを逆生成)</option>
+                            <option value="format-conversion">Format Conversion (特定フォーマットへの構造化)</option>
+                        </select>
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="distill-target-format"><?php echo esc_html__('生成するデータ形式:', 'fourier'); ?></label>
+                        <select id="distill-target-format" class="upload-form-input">
+                            <option value="instruction">Instruction (QAペア)</option>
+                            <option value="chatml">ChatML (会話形式)</option>
+                            <option value="cot">CoT (思考過程付き)</option>
+                            <option value="dpo">DPO / RLHF (比較データ)</option>
+                            <option value="plain">プレーンテキスト</option>
+                        </select>
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="distill-provider"><?php echo esc_html__('教師モデル (LLMプロバイダ):', 'fourier'); ?></label>
+                        <select id="distill-provider" class="upload-form-input">
+                            <option value="openai">OpenAI (推奨: GPT-4o等)</option>
+                            <option value="gemini">Google Gemini</option>
+                            <option value="ollama">Ollama (ローカルサーバー)</option>
+                            <option value="custom">Custom (Llama.cpp等)</option>
+                        </select>
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="distill-prompt"><?php echo esc_html__('追加の指示（任意）:', 'fourier'); ?></label>
+                        <textarea id="distill-prompt" class="upload-form-input" rows="2" placeholder="例: 出力は小学生でもわかる言葉遣いにしてください。"></textarea>
+                    </div>
+                    <div style="margin-top: 1.5rem; text-align: center;">
+                        <button type="button" id="btn-distill-submit" class="btn-black" style="background: var(--accent); border-color: var(--accent); color: var(--text-inverse);">
+                            <span class="material-symbols-outlined">science</span> 蒸留処理を実行して登録
+                        </button>
+                    </div>
+                </div>
+
                 <div id="status-message" class="status-msg"></div>
 
-                <div style="text-align: center; margin-top: 2rem;">
-                    <input type="hidden" id="edit-post-id" value="" />
-                    <button type="button" id="btn-save-data" class="btn-black" style="margin: 0 auto;">
-                        <span class="material-symbols-outlined">save</span>
-                        <?php echo esc_html__('データを登録', 'fourier'); ?>
-                    </button>
-                </div>
+                <input type="hidden" id="edit-post-id" value="" />
 
             </div>
 
@@ -636,94 +560,12 @@ button.btn-black span.material-symbols-outlined {
                 </a>
             </div>
 
-            <!-- 編集モーダル -->
-            <div class="edit-modal-overlay" id="edit-modal-overlay">
-                <div class="edit-modal">
-                    <button class="edit-modal-close" id="edit-modal-close">
-                        <span class="material-symbols-outlined">close</span>
-                    </button>
-                    <h3 id="edit-modal-title"><?php echo esc_html__('データを編集', 'fourier'); ?></h3>
-                    <div class="upload-form-group" style="margin-bottom: 1rem;">
-                        <label for="edit-title" style="font-weight: 600;"><?php echo esc_html__('タイトル:', 'fourier'); ?></label>
-                        <input type="text" id="edit-title" class="upload-form-input" />
-                    </div>
-                    <div class="upload-form-group" style="margin-bottom: 1rem;">
-                        <label style="font-weight: 600;"><?php echo esc_html__('フォーマット:', 'fourier'); ?></label>
-                        <span id="edit-format-label" style="font-size: 0.9rem; color: var(--text-secondary);"></span>
-                    </div>
-                    <div id="edit-fields-container">
-                        <!-- 動的にフィールドを生成 -->
-                    </div>
-                    <details class="metadata-section" style="margin-top: 1rem;">
-                        <summary>
-                            <span class="material-symbols-outlined arrow" style="font-size: 1rem;">chevron_right</span>
-                            <?php echo esc_html__('メタデータ', 'fourier'); ?>
-                        </summary>
-                        <div class="metadata-grid" style="margin-top: 1rem;">
-                            <div>
-                                <label for="edit-meta-language"><?php echo esc_html__('言語', 'fourier'); ?></label>
-                                <select id="edit-meta-language" class="upload-form-input">
-                                    <option value=""><?php echo esc_html__('-- 選択 --', 'fourier'); ?></option>
-                                    <option value="ja"><?php echo esc_html__('日本語', 'fourier'); ?></option>
-                                    <option value="en"><?php echo esc_html__('英語', 'fourier'); ?></option>
-                                    <option value="zh"><?php echo esc_html__('中国語', 'fourier'); ?></option>
-                                    <option value="ko"><?php echo esc_html__('韓国語', 'fourier'); ?></option>
-                                    <option value="multi"><?php echo esc_html__('多言語', 'fourier'); ?></option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="edit-meta-category"><?php echo esc_html__('カテゴリ', 'fourier'); ?></label>
-                                <input type="text" id="edit-meta-category" class="upload-form-input" />
-                            </div>
-                            <div>
-                                <label for="edit-meta-difficulty"><?php echo esc_html__('難易度', 'fourier'); ?></label>
-                                <select id="edit-meta-difficulty" class="upload-form-input">
-                                    <option value=""><?php echo esc_html__('-- 選択 --', 'fourier'); ?></option>
-                                    <option value="beginner"><?php echo esc_html__('初級', 'fourier'); ?></option>
-                                    <option value="intermediate"><?php echo esc_html__('中級', 'fourier'); ?></option>
-                                    <option value="advanced"><?php echo esc_html__('上級', 'fourier'); ?></option>
-                                </select>
-                            </div>
-                            <div>
-                                <label><?php echo esc_html__('品質スコア', 'fourier'); ?></label>
-                                <div class="quality-stars" id="edit-quality-stars">
-                                    <span class="star" data-value="1">★</span>
-                                    <span class="star" data-value="2">★</span>
-                                    <span class="star" data-value="3">★</span>
-                                    <span class="star" data-value="4">★</span>
-                                    <span class="star" data-value="5">★</span>
-                                </div>
-                                <input type="hidden" id="edit-meta-quality" value="0" />
-                            </div>
-                            <div>
-                                <label for="edit-meta-source"><?php echo esc_html__('出典元', 'fourier'); ?></label>
-                                <input type="text" id="edit-meta-source" class="upload-form-input" />
-                            </div>
-                            <div>
-                                <label for="edit-meta-tags"><?php echo esc_html__('タグ（カンマ区切り）', 'fourier'); ?></label>
-                                <input type="text" id="edit-meta-tags" class="upload-form-input" />
-                            </div>
-                        </div>
-                    </details>
-                    <div id="edit-status-message" class="status-msg" style="margin-top: 1rem;"></div>
-                    <div style="text-align: center; margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
-                        <button type="button" id="btn-edit-save" class="btn-black">
-                            <span class="material-symbols-outlined">save</span>
-                            <?php echo esc_html__('更新', 'fourier'); ?>
-                        </button>
-                        <button type="button" id="btn-edit-cancel" class="btn-black" style="opacity: 0.7;">
-                            <?php echo esc_html__('キャンセル', 'fourier'); ?>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        <?php endif; ?>
+            <?php endif; ?>
     </div>
 </main>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        if (!document.getElementById('btn-save-data')) return;
 
         var ajaxUrl = "<?php echo esc_url(admin_url('admin-ajax.php')); ?>";
         var uploadNonce = "<?php echo wp_create_nonce('learning_data_action'); ?>";
@@ -744,63 +586,13 @@ button.btn-black span.material-symbols-outlined {
                 targetContent.classList.add('active');
                 currentFormat = targetContent.getAttribute('data-format');
 
-                
+                if (currentFormat === 'scrape') {
+                    document.getElementById('btn-save-data').parentElement.style.display = 'none';
+                } else {
                     document.getElementById('btn-save-data').parentElement.style.display = 'block';
+                }
             });
         });
-
-        // ChatML 行追加
-        const chatmlContainer = document.getElementById('chatml-container');
-        const btnAddChatml = document.getElementById('btn-add-chatml');
-        
-        function addChatmlRow(role = 'user', content = '') {
-            const row = document.createElement('div');
-            row.className = 'dynamic-row chatml-row';
-            row.innerHTML = `
-                <select class="upload-form-input chatml-role">
-                    <option value="system" ${role === 'system' ? 'selected' : ''}>system</option>
-                    <option value="user" ${role === 'user' ? 'selected' : ''}>user</option>
-                    <option value="assistant" ${role === 'assistant' ? 'selected' : ''}>assistant</option>
-                </select>
-                <textarea class="upload-form-input chatml-content" rows="2" placeholder="メッセージを入力...">${content}</textarea>
-                <button type="button" class="btn-remove-row" title="削除"><span class="material-symbols-outlined">delete</span></button>
-            `;
-            row.querySelector('.btn-remove-row').addEventListener('click', () => row.remove());
-            chatmlContainer.appendChild(row);
-        }
-        
-        if (btnAddChatml) {
-            btnAddChatml.addEventListener('click', () => addChatmlRow('user', ''));
-            // 初期状態としてシステムとユーザーを用意
-            addChatmlRow('system', 'You are a helpful assistant.');
-            addChatmlRow('user', '');
-        }
-
-        // ShareGPT 行追加
-        const sharegptContainer = document.getElementById('sharegpt-container');
-        const btnAddSharegpt = document.getElementById('btn-add-sharegpt');
-        
-        function addSharegptRow(from = 'human', value = '') {
-            const row = document.createElement('div');
-            row.className = 'dynamic-row sharegpt-row';
-            row.innerHTML = `
-                <select class="upload-form-input sharegpt-from">
-                    <option value="system" ${from === 'system' ? 'selected' : ''}>system</option>
-                    <option value="human" ${from === 'human' ? 'selected' : ''}>human</option>
-                    <option value="gpt" ${from === 'gpt' ? 'selected' : ''}>gpt</option>
-                </select>
-                <textarea class="upload-form-input sharegpt-value" rows="2" placeholder="会話を入力...">${value}</textarea>
-                <button type="button" class="btn-remove-row" title="削除"><span class="material-symbols-outlined">delete</span></button>
-            `;
-            row.querySelector('.btn-remove-row').addEventListener('click', () => row.remove());
-            sharegptContainer.appendChild(row);
-        }
-        
-        if (btnAddSharegpt) {
-            btnAddSharegpt.addEventListener('click', () => addSharegptRow('human', ''));
-            addSharegptRow('human', '');
-            addSharegptRow('gpt', '');
-        }
 
         // メッセージ表示
         function showStatus(message, isError = false) {
@@ -812,100 +604,117 @@ button.btn-black span.material-symbols-outlined {
             }, 5000);
         }
 
-        // データ登録
-        document.getElementById('btn-save-data').addEventListener('click', function() {
-            const title = document.getElementById('data-title').value.trim();
-            if (!title) {
-                showStatus('タイトルを入力してください。', true);
+        // URLスクレイピング処理
+        document.getElementById('btn-scrape-submit').addEventListener('click', function() {
+            const url = document.getElementById('scrape-url').value.trim();
+            const targetFormat = document.getElementById('scrape-target-format').value;
+            const provider = document.getElementById('scrape-provider').value;
+            const extraPrompt = document.getElementById('scrape-prompt').value.trim();
+
+            if (!url) {
+                showStatus('URLを入力してください。', true);
                 return;
             }
 
-            let formatData = {};
-
-            try {
-                if (currentFormat === 'plain') {
-                    formatData = { text: document.getElementById('plain-text').value };
-                } 
-                else if (currentFormat === 'instruction') {
-                    formatData = {
-                        instruction: document.getElementById('inst-instruction').value,
-                        input: document.getElementById('inst-input').value,
-                        output: document.getElementById('inst-output').value
-                    };
-                }
-                else if (currentFormat === 'chatml') {
-                    const messages = [];
-                    document.querySelectorAll('.chatml-row').forEach(row => {
-                        const role = row.querySelector('.chatml-role').value;
-                        const content = row.querySelector('.chatml-content').value;
-                        if (content.trim()) messages.push({ role, content });
-                    });
-                    formatData = { messages };
-                }
-                else if (currentFormat === 'sharegpt') {
-                    const conversations = [];
-                    document.querySelectorAll('.sharegpt-row').forEach(row => {
-                        const from = row.querySelector('.sharegpt-from').value;
-                        const value = row.querySelector('.sharegpt-value').value;
-                        if (value.trim()) conversations.push({ from, value });
-                    });
-                    formatData = { conversations };
-                }
-                else if (currentFormat === 'cot') {
-                    formatData = {
-                        question: document.getElementById('cot-question').value,
-                        thought: document.getElementById('cot-thought').value,
-                        answer: document.getElementById('cot-answer').value
-                    };
-                }
-                else if (currentFormat === 'dpo') {
-                    formatData = {
-                        prompt: document.getElementById('dpo-prompt').value,
-                        chosen: document.getElementById('dpo-chosen').value,
-                        rejected: document.getElementById('dpo-rejected').value
-                    };
-                }
-                else if (currentFormat === 'frontend_code') {
-                    formatData = {
-                        explanation: document.getElementById('fe-explanation').value,
-                        html: document.getElementById('fe-html').value,
-                        css: document.getElementById('fe-css').value,
-                        js: document.getElementById('fe-js').value
-                    };
-                }
-                else if (currentFormat === 'structured') {
-                    const jsonStr = document.getElementById('structured-json').value;
-                    if (jsonStr.trim() === '') {
-                        formatData = {};
-                    } else {
-                        formatData = JSON.parse(jsonStr);
-                    }
-                }
-            } catch (e) {
-                showStatus('JSONのパースに失敗しました。構造化データの書式を確認してください。', true);
+            const titleInput = document.getElementById('data-title').value.trim();
+            if (!titleInput) {
+                showStatus('タイトルを入力してください。自動取得の場合もタイトルは必須です。', true);
                 return;
             }
 
-            const payload = {
-                format: currentFormat,
-                data: formatData
-            };
-
-            const formData = new FormData();
-            const editPostId = document.getElementById('edit-post-id').value;
-            formData.append('action', editPostId ? 'frontend_learning_data_update' : 'frontend_learning_data_upload');
-            formData.append('nonce', uploadNonce);
-            formData.append('title', title);
-            formData.append('json_data', JSON.stringify(payload));
-            if (editPostId) formData.append('post_id', editPostId);
-
-            // メタデータの送信
+            // メタデータ収集
             var metaLang = document.getElementById('meta-language');
             var metaCat = document.getElementById('meta-category');
             var metaDiff = document.getElementById('meta-difficulty');
             var metaQuality = document.getElementById('meta-quality');
             var metaSource = document.getElementById('meta-source');
             var metaTags = document.getElementById('meta-tags');
+
+            const formData = new FormData();
+            formData.append('action', 'frontend_learning_data_scrape_url');
+            formData.append('nonce', uploadNonce);
+            formData.append('url', url);
+            formData.append('target_format', targetFormat);
+            formData.append('provider', provider);
+            formData.append('extra_prompt', extraPrompt);
+            formData.append('title', titleInput);
+
+            if (metaLang && metaLang.value) formData.append('language', metaLang.value);
+            if (metaCat && metaCat.value) formData.append('category', metaCat.value);
+            if (metaDiff && metaDiff.value) formData.append('difficulty', metaDiff.value);
+            if (metaQuality && metaQuality.value) formData.append('quality', metaQuality.value);
+            if (metaSource && metaSource.value) {
+                formData.append('source', metaSource.value);
+            } else {
+                formData.append('source', url); // 入力がなければURLをソースに設定
+            }
+            if (metaTags && metaTags.value) formData.append('tags', metaTags.value);
+
+            showStatus('URLからデータを取得・生成しています... (数分かかる場合があります)', false);
+            this.disabled = true;
+            this.style.opacity = '0.5';
+
+            fetch(ajaxUrl, {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(response => {
+                this.disabled = false;
+                this.style.opacity = '1';
+                
+                if (response.success) {
+                    showStatus('データの自動取得と登録が完了しました！(ID: ' + response.data.post_id + ')', false);
+                    document.getElementById('scrape-url').value = '';
+                    document.getElementById('data-title').value = '';
+                } else {
+                    showStatus(response.data.message || '処理に失敗しました。', true);
+                }
+            })
+            .catch(error => {
+                this.disabled = false;
+                this.style.opacity = '1';
+                showStatus('通信エラーが発生しました。', true);
+            });
+        });
+
+        // データ蒸留処理
+        document.getElementById('btn-distill-submit').addEventListener('click', function() {
+            const seed = document.getElementById('distill-seed').value.trim();
+            const method = document.getElementById('distill-method').value;
+            const targetFormat = document.getElementById('distill-target-format').value;
+            const provider = document.getElementById('distill-provider').value;
+            const extraPrompt = document.getElementById('distill-prompt').value.trim();
+
+            if (!seed) {
+                showStatus('シードデータまたはトピックを入力してください。', true);
+                return;
+            }
+
+            const titleInput = document.getElementById('data-title').value.trim();
+            if (!titleInput) {
+                showStatus('タイトルを入力してください。', true);
+                return;
+            }
+
+            // メタデータ収集
+            var metaLang = document.getElementById('meta-language');
+            var metaCat = document.getElementById('meta-category');
+            var metaDiff = document.getElementById('meta-difficulty');
+            var metaQuality = document.getElementById('meta-quality');
+            var metaSource = document.getElementById('meta-source');
+            var metaTags = document.getElementById('meta-tags');
+
+            const formData = new FormData();
+            formData.append('action', 'frontend_learning_data_distill_from_seed');
+            formData.append('nonce', uploadNonce);
+            formData.append('seed_data', seed);
+            formData.append('distill_method', method);
+            formData.append('target_format', targetFormat);
+            formData.append('provider', provider);
+            formData.append('extra_prompt', extraPrompt);
+            formData.append('title', titleInput);
+
             if (metaLang && metaLang.value) formData.append('language', metaLang.value);
             if (metaCat && metaCat.value) formData.append('category', metaCat.value);
             if (metaDiff && metaDiff.value) formData.append('difficulty', metaDiff.value);
@@ -913,52 +722,30 @@ button.btn-black span.material-symbols-outlined {
             if (metaSource && metaSource.value) formData.append('source', metaSource.value);
             if (metaTags && metaTags.value) formData.append('tags', metaTags.value);
 
-            // 送信
+            showStatus('教師モデルから蒸留データを生成しています... (数分かかる場合があります)', false);
+            this.disabled = true;
+            this.style.opacity = '0.5';
+
             fetch(ajaxUrl, {
                 method: 'POST',
                 body: formData
             })
             .then(res => res.json())
             .then(response => {
+                this.disabled = false;
+                this.style.opacity = '1';
+                
                 if (response.success) {
-                    showStatus(editPostId ? 'データが正常に更新されました。(ID: ' + response.data.post_id + ')' : 'データが正常に登録されました。(ID: ' + response.data.post_id + ')');
-                    document.getElementById('edit-post-id').value = '';
-                    // フォームクリア
+                    showStatus('蒸留データの自動登録が完了しました！(ID: ' + response.data.post_id + ')', false);
+                    document.getElementById('distill-seed').value = '';
                     document.getElementById('data-title').value = '';
-                    if (currentFormat === 'plain') document.getElementById('plain-text').value = '';
-                    if (currentFormat === 'instruction') {
-                        document.getElementById('inst-instruction').value = '';
-                        document.getElementById('inst-input').value = '';
-                        document.getElementById('inst-output').value = '';
-                    }
-                    if (currentFormat === 'cot') {
-                        document.getElementById('cot-question').value = '';
-                        document.getElementById('cot-thought').value = '';
-                        document.getElementById('cot-answer').value = '';
-                    }
-                    if (currentFormat === 'frontend_code') {
-                        document.getElementById('fe-explanation').value = '';
-                        document.getElementById('fe-html').value = '';
-                        document.getElementById('fe-css').value = '';
-                        document.getElementById('fe-js').value = '';
-                    }
-                    if (currentFormat === 'structured') document.getElementById('structured-json').value = '';
-                    // chatml/sharegpt は一旦リセット
-                    if (currentFormat === 'chatml') {
-                        chatmlContainer.innerHTML = '';
-                        addChatmlRow('system', 'You are a helpful assistant.');
-                        addChatmlRow('user', '');
-                    }
-                    if (currentFormat === 'sharegpt') {
-                        sharegptContainer.innerHTML = '';
-                        addSharegptRow('human', '');
-                        addSharegptRow('gpt', '');
-                    }
                 } else {
-                    showStatus(response.data.message || '登録に失敗しました。', true);
+                    showStatus(response.data.message || '処理に失敗しました。', true);
                 }
             })
             .catch(error => {
+                this.disabled = false;
+                this.style.opacity = '1';
                 showStatus('通信エラーが発生しました。', true);
             });
         });
