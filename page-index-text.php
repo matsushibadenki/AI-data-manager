@@ -300,7 +300,7 @@ get_header();
 
     .data-sheet td {
         background: var(--bg-surface, #fff);
-        color: var(--text-secondary, #333);
+        color: #333333;
         word-break: break-word;
     }
 

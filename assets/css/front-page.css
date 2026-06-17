@@ -1125,8 +1125,10 @@ body.attachment a.btn-black {
    ドラッグ＆ドロップアップロードページ
    ───────────────────────────────────────────── */
 .upload-page-container {
-    max-width: 800px !important;
-    margin: 0 auto;
+    max-width: 1000px !important;
+    margin: 3rem auto !important;
+    padding: 0 1rem !important;
+    box-sizing: border-box;
     text-align: center;
 }
 

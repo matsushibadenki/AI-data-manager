@@ -68,7 +68,7 @@ get_header();
 
 <style>
     .settings-container {
-        max-width: 800px;
+        max-width: 1000px;
         margin: 3rem auto;
         padding: 0 1rem;
         font-family: var(--font-primary, 'Inter', 'Noto Sans JP', sans-serif);
