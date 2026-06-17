@@ -1,0 +1,9 @@
+[
+  {
+    "title": "（任意のタイトル）",
+    "explanation": "（任意のコードの説明）",
+    "html": "<div>ここにHTMLを入力します。</div>",
+    "css": "div {\n  color: red;\n}",
+    "js": "console.log('Hello World');"
+  }
+]

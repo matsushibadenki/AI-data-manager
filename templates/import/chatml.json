@@ -1,0 +1,19 @@
+[
+  {
+    "title": "（任意のタイトル）",
+    "messages": [
+      {
+        "role": "system",
+        "content": "あなたは親切なAIアシスタントです。"
+      },
+      {
+        "role": "user",
+        "content": "こんにちは！"
+      },
+      {
+        "role": "assistant",
+        "content": "こんにちは！どのようなご用件でしょうか？"
+      }
+    ]
+  }
+]

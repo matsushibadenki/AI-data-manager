@@ -1,7 +1,8 @@
 <?php
 /*
- * Name: page-index-text.php
- * Description: 登録されたテキスト学習データをシート（テーブル）形式で表示するページ。LaTeX数式表示に対応。
+ * URL: /wp-content/themes/AI-data-manager/page-index-text.php
+ * File Name: page-index-text.php
+ * Description: 登録されたテキスト学習データをシート（テーブル）形式で表示するページ。LaTeX数式表示に対応し、一覧からのデータ削除などのアクションもサポート。
  * Template Name: Text Data Index
  */
 
@@ -136,25 +137,66 @@ get_header();
         display: inline-flex;
         justify-content: center;
         align-items: center;
-        width: 2rem;
-        height: 2rem;
+        width: 2.2rem;
+        height: 2.2rem;
         padding: 0;
         margin: 0;
-        border-radius: 4px;
+        border-radius: 8px;
         text-decoration: none;
-        color: var(--text-primary, #333);
-        border: 1px solid var(--border-subtle, #ccc);
-        background: var(--bg-surface, #fff);
-        transition: all 0.2s;
+        transition: all 0.2s ease;
         cursor: pointer;
+        border: none;
+        background: transparent;
     }
     .action-btn:hover {
         transform: translateY(-2px);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.08);
     }
     .action-btn span {
-        font-size: 1.1rem !important;
+        font-size: 1.2rem !important;
         line-height: 1;
+    }
+
+    /* 編集ボタン (グレー) */
+    .action-btn.btn-edit {
+        background: var(--bg-surface, #fff);
+        border: 1px solid var(--border-subtle, #e0e0e0);
+        color: var(--text-primary, #333);
+    }
+    .action-btn.btn-edit:hover {
+        background: #f5f5f5;
+        border-color: #ccc;
+        color: var(--text-primary, #333);
+    }
+
+    /* バリエーション生成ボタン (ゴールド) */
+    .action-btn.btn-open-var {
+        background: rgba(201, 169, 110, 0.15);
+        color: #C9A96E;
+    }
+    .action-btn.btn-open-var:hover {
+        background: #C9A96E;
+        color: #fff;
+    }
+
+    /* データ蒸留ボタン (パープル) */
+    .action-btn.btn-open-distill {
+        background: rgba(107, 76, 154, 0.15);
+        color: #6b4c9a;
+    }
+    .action-btn.btn-open-distill:hover {
+        background: #6b4c9a;
+        color: #fff;
+    }
+
+    /* 削除ボタン (レッド) */
+    .action-btn.btn-delete-data {
+        background: rgba(227, 52, 47, 0.15);
+        color: #e3342f;
+    }
+    .action-btn.btn-delete-data:hover {
+        background: #e3342f;
+        color: #fff;
     }
 
     /* ヘッダー周りの調整 */
@@ -765,7 +807,7 @@ get_header();
             if (theadTr) {
                 const th = document.createElement('th');
                 th.textContent = 'アクション';
-                th.style.width = '140px';
+                th.style.width = '180px';
                 th.style.textAlign = 'center';
                 th.style.verticalAlign = 'middle';
                 th.style.padding = '0.5rem';
@@ -790,14 +832,17 @@ get_header();
                     td.style.padding = '0.2rem';
                     td.innerHTML = `
                         <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
-                            <a href="${editBaseUrl}?edit_id=${id}" class="action-btn" title="編集">
+                            <a href="${editBaseUrl}?edit_id=${id}" class="action-btn btn-edit" title="編集">
                                 <span class="material-symbols-outlined">edit</span>
                             </a>
-                            <button type="button" class="action-btn btn-open-var" data-id="${id}" style="background: #C9A96E; border-color: #C9A96E; color: #fff;" title="バリエーション生成">
+                            <button type="button" class="action-btn btn-open-var" data-id="${id}" title="バリエーション生成">
                                 <span class="material-symbols-outlined">auto_awesome</span>
                             </button>
-                            <button type="button" class="action-btn btn-open-distill" data-id="${id}" style="background: #6b4c9a; border-color: #6b4c9a; color: #fff;" title="データ蒸留">
+                            <button type="button" class="action-btn btn-open-distill" data-id="${id}" title="データ蒸留">
                                 <span class="material-symbols-outlined">science</span>
+                            </button>
+                            <button type="button" class="action-btn btn-delete-data" data-id="${id}" title="削除">
+                                <span class="material-symbols-outlined">delete</span>
                             </button>
                         </div>
                     `;
@@ -965,6 +1010,49 @@ get_header();
                 distillStatusMsg.style.color = 'red';
                 btnDistillSubmit.disabled = false;
                 btnDistillSubmit.textContent = '蒸留して保存';
+            });
+        });
+
+        // 削除ロジック
+        document.querySelectorAll('.btn-delete-data').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (!confirm('このデータを削除してもよろしいですか？')) {
+                    return;
+                }
+                const postId = this.getAttribute('data-id');
+                const btnIcon = this.querySelector('.material-symbols-outlined');
+                const originalIcon = btnIcon.textContent;
+                btnIcon.style.animation = 'spin 1s linear infinite';
+                btnIcon.textContent = 'autorenew';
+                this.disabled = true;
+
+                const formData = new FormData();
+                formData.append('action', 'frontend_learning_data_delete');
+                formData.append('nonce', varNonce);
+                formData.append('post_id', postId);
+
+                fetch(ajaxUrl, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.data.message || '削除しました。');
+                        window.location.reload();
+                    } else {
+                        alert('エラー: ' + (data.data && data.data.message ? data.data.message : '削除に失敗しました。'));
+                        this.disabled = false;
+                        btnIcon.style.animation = '';
+                        btnIcon.textContent = originalIcon;
+                    }
+                })
+                .catch(err => {
+                    alert('通信エラーが発生しました。');
+                    this.disabled = false;
+                    btnIcon.style.animation = '';
+                    btnIcon.textContent = originalIcon;
+                });
             });
         });
 

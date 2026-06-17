@@ -1,7 +1,8 @@
 <?php
 /*
- * Name: functions_llm_api.php
- * Description: LLM APIとの通信およびデータバリエーションの生成処理
+ * URL: /wp-content/themes/AI-data-manager/inc/functions_llm_api.php
+ * File Name: functions_llm_api.php
+ * Description: LLM APIとの通信およびデータバリエーションの生成処理。URLやファイルからLLMを使って学習データを抽出・生成する機能、Ollama等のローカル/外部API連携を管理。
  */
 
 if (!defined('ABSPATH')) {
@@ -280,10 +281,34 @@ function _parse_json_from_llm_response($text)
     // 最初と最後が [ ] または { } でない場合はエラーにしたいが、まずはパースしてみる
     $decoded = json_decode($text, true);
     if (json_last_error() === JSON_ERROR_NONE) {
-        return wp_is_numeric_array($decoded) ? $decoded : [$decoded]; // 配列に強制
+        if (!wp_is_numeric_array($decoded)) {
+            // draft_thought と data がある場合、または variations がある場合はそのまま返す
+            if ((isset($decoded['draft_thought']) && isset($decoded['data'])) || isset($decoded['variations'])) {
+                return $decoded;
+            }
+            return [$decoded]; // それ以外は配列に強制
+        }
+        return $decoded;
     }
 
-    // パース失敗時、配列の開始部分を強引に探す
+    // パース失敗時、オブジェクトの開始部分を強引に探す
+    $start_obj = strpos($text, '{');
+    $end_obj = strrpos($text, '}');
+    if ($start_obj !== false && $end_obj !== false && $start_obj < $end_obj) {
+        $substr_obj = substr($text, $start_obj, $end_obj - $start_obj + 1);
+        $decoded_obj = json_decode($substr_obj, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            if (!wp_is_numeric_array($decoded_obj)) {
+                if ((isset($decoded_obj['draft_thought']) && isset($decoded_obj['data'])) || isset($decoded_obj['variations'])) {
+                    return $decoded_obj;
+                }
+                return [$decoded_obj];
+            }
+            return $decoded_obj;
+        }
+    }
+
+    // オブジェクトが見つからない場合、配列の開始部分を強引に探す
     $start = strpos($text, '[');
     $end = strrpos($text, ']');
     if ($start !== false && $end !== false && $start < $end) {
@@ -390,7 +415,7 @@ function llm_api_call_ollama($base_url, $model, $system, $user)
     ];
 
     $response = wp_remote_post($url, [
-        'timeout' => 900, // ローカルは非常に時間がかかる場合があるため15分に設定 // ローカルは時間がかかる場合があるため長めに設定
+        'timeout' => 1800, // ローカルは非常に時間がかかる場合があるため30分に設定
         'headers' => [
             'Content-Type' => 'application/json'
         ],

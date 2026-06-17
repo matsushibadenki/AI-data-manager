@@ -274,6 +274,56 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                     <input type="file" id="file-input" accept=".jsonl,.json,.csv" />
                 </div>
 
+                <!-- テンプレートダウンロード -->
+                <style>
+                .template-dl-btn {
+                    font-size: 0.75rem;
+                    padding: 0.25rem 0.6rem;
+                    background: var(--bg-body, #fafafa);
+                    border: 1px solid var(--border-subtle, #e0e0e0);
+                    border-radius: 4px;
+                    color: var(--text-secondary, #666);
+                    text-decoration: none;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.2rem;
+                    transition: all 0.2s ease;
+                }
+                .template-dl-btn:hover {
+                    background: var(--bg-surface, #fff);
+                    color: var(--text-primary, #333);
+                    border-color: #ccc;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                }
+                </style>
+                <div class="template-downloads" style="margin-top: 1rem; padding: 0.8rem 1rem; background: var(--bg-surface, #fff); border: 1px solid var(--border-subtle, #e0e0e0); border-radius: 6px;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.3rem;">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">download</span>
+                        入力用テンプレート（JSON）をダウンロード
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                        <?php
+                        $templates = [
+                            'plain' => 'プレーンテキスト',
+                            'instruction' => 'Instruction',
+                            'chatml' => 'ChatML',
+                            'sharegpt' => 'ShareGPT',
+                            'cot' => 'CoT',
+                            'dpo' => 'DPO / RLHF',
+                            'frontend_code' => 'HTML/CSS/JS',
+                            'structured' => '構造化データ'
+                        ];
+                        $template_dir_url = get_template_directory_uri() . '/templates/import/';
+                        foreach ($templates as $file => $label):
+                        ?>
+                            <a href="<?php echo esc_url($template_dir_url . $file . '.json'); ?>" download="<?php echo esc_attr($file); ?>_template.json" class="template-dl-btn">
+                                <span class="material-symbols-outlined" style="font-size: 0.9rem;">description</span>
+                                <?php echo esc_html($label); ?>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
                 <!-- プレビューと実行 -->
                 <div id="import-preview-area" style="display: none;">
                     <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
@@ -511,7 +561,12 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                     });
                 } else if (pendingImportData.fileExt === 'json') {
                     let j = JSON.parse(pendingImportData.rawContent);
-                    if (!Array.isArray(j)) j = [j];
+                    // LLMが { draft_thought: "...", data: [...] } の形式で返した場合、配列部分を取り出す
+                    if (!Array.isArray(j) && j.data && Array.isArray(j.data)) {
+                        j = j.data;
+                    } else if (!Array.isArray(j)) {
+                        j = [j];
+                    }
                     items = j.map(detectFormatLocally);
                 }
                 // CSV could be handled but complex on client side without library. We'll skip client parsing for CSV if complicated, 
@@ -521,14 +576,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 console.warn(e);
             }
 
-            // Since we already have the file in input, let's just use a trick: the server handles execution with JSON items.
-            // Wait, the server expects `items` JSON.
-            // Let's fallback to asking user to select again if we lost it? No, we have the file input.
-            const file = document.getElementById('file-input').files[0];
-            if (!file) { alert('ファイルが見つかりません'); return; }
-
-            // To avoid huge POST, we should chunk if needed. For now, we do 1 request with the file, and let the server do it directly.
-            // Let's modify the execute logic: we send the file again, the server parses and imports.
+            // 抽出した items配列をそのままサーバーへ送る
             const fd = new FormData();
             fd.append('action', 'frontend_learning_data_import_execute');
             fd.append('nonce', uploadNonce);

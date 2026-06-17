@@ -256,6 +256,12 @@ function frontend_learning_data_import_preview_handler()
         if (json_last_error() !== JSON_ERROR_NONE) {
             wp_send_json_error(['message' => esc_html__('JSONの解析に失敗しました。', 'fourier')]);
         }
+        
+        // もし LLM 出力のような { "draft_thought": "...", "data": [...] } の形式なら "data" 配列を抽出する
+        if (is_array($json) && !wp_is_numeric_array($json) && isset($json['data']) && is_array($json['data'])) {
+            $json = $json['data'];
+        }
+
         if (wp_is_numeric_array($json)) {
             foreach ($json as $index => $item) {
                 $parsed_items[] = _detect_and_format_import_item($item);
