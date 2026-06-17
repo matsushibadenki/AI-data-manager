@@ -89,9 +89,18 @@ function fourier_rest_export_data($request) {
                 'data' => isset($content['data']) ? $content['data'] : []
             ];
 
-            // LLMの学習用パイプラインが読み込みやすいよう、dataの中身を最上位に平坦化（または展開）する
-            $merged = array_merge(['title' => $item['title']], is_array($item['data']) ? $item['data'] : ['text' => $item['data']]);
-            $export_data[] = $merged;
+            $output_style = $request->get_param('output_style');
+            if (empty($output_style)) {
+                $output_style = 'raw';
+            }
+
+            if (function_exists('fourier_format_learning_data')) {
+                $formatted_item = fourier_format_learning_data($item, $output_style);
+                $export_data[] = $formatted_item;
+            } else {
+                $merged = array_merge(['title' => $item['title']], is_array($item['data']) ? $item['data'] : ['text' => $item['data']]);
+                $export_data[] = $merged;
+            }
         }
     }
     wp_reset_postdata();

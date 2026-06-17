@@ -380,6 +380,54 @@ function _detect_and_format_import_item($raw)
 /*--------------------------------------------------------------
   エクスポート
 --------------------------------------------------------------*/
+function fourier_format_learning_data($item, $output_style) {
+    if ($output_style === 'sara') {
+        return [
+            'event_uid' => 'ld_' . md5($item['title'] . wp_generate_password(8, false)),
+            'event_type' => 'learning_data',
+            'proposal_source' => 'import',
+            'verification_state' => 'verified',
+            'evidence_type' => 'verified_fact',
+            'content' => json_encode($item['data'], JSON_UNESCAPED_UNICODE),
+            'tags' => ['learning_data', 'sara', $item['format']]
+        ];
+    } elseif ($output_style === 'transformer') {
+        $text = '';
+        $data = $item['data'];
+        if (is_array($data)) {
+            if ($item['format'] === 'instruction' && isset($data['instruction'])) {
+                $text = "### 指示:\n" . $data['instruction'] . "\n\n";
+                if (!empty($data['input'])) {
+                    $text .= "### 入力:\n" . $data['input'] . "\n\n";
+                }
+                if (isset($data['output'])) {
+                    $text .= "### 応答:\n" . $data['output'];
+                }
+            } elseif ($item['format'] === 'chatml' && isset($data['messages'])) {
+                foreach ($data['messages'] as $msg) {
+                    $text .= "<|im_start|>" . ($msg['role'] ?? '') . "\n" . ($msg['content'] ?? '') . "<|im_end|>\n";
+                }
+            } elseif ($item['format'] === 'sharegpt' && isset($data['conversations'])) {
+                foreach ($data['conversations'] as $msg) {
+                    $text .= strtoupper($msg['from'] ?? '') . ": " . ($msg['value'] ?? '') . "\n";
+                }
+            } elseif ($item['format'] === 'dpo' && isset($data['prompt'])) {
+                $text = "### Prompt:\n" . $data['prompt'] . "\n\n### Chosen:\n" . ($data['chosen'] ?? '') . "\n\n### Rejected:\n" . ($data['rejected'] ?? '');
+            } elseif ($item['format'] === 'cot' && isset($data['question'])) {
+                $text = "### Question:\n" . $data['question'] . "\n\n### Thought:\n" . ($data['thought'] ?? '') . "\n\n### Answer:\n" . ($data['answer'] ?? '');
+            } else {
+                $text = json_encode($data, JSON_UNESCAPED_UNICODE);
+            }
+        } else {
+            $text = $data;
+        }
+        return ['text' => trim($text)];
+    }
+    
+    // raw (default)
+    return array_merge(['title' => $item['title']], is_array($item['data']) ? $item['data'] : ['text' => $item['data']]);
+}
+
 add_action('wp_ajax_frontend_learning_data_export', 'frontend_learning_data_export_handler');
 add_action('wp_ajax_nopriv_frontend_learning_data_export', 'frontend_learning_data_export_handler');
 function frontend_learning_data_export_handler()
@@ -390,7 +438,16 @@ function frontend_learning_data_export_handler()
     }
 
     $export_format = isset($_POST['export_format']) ? sanitize_text_field($_POST['export_format']) : 'jsonl';
-    $target_formats = isset($_POST['formats']) ? explode(',', sanitize_text_field($_POST['formats'])) : [];
+    
+    $target_formats = [];
+    if (isset($_POST['formats'])) {
+        $posted_formats = wp_unslash($_POST['formats']);
+        if (is_array($posted_formats)) {
+            $target_formats = array_map('sanitize_text_field', $posted_formats);
+        } else {
+            $target_formats = explode(',', sanitize_text_field($posted_formats));
+        }
+    }
     
     $args = [
         'post_type'      => 'post',
@@ -424,6 +481,8 @@ function frontend_learning_data_export_handler()
                 'data' => isset($content['data']) ? $content['data'] : []
             ];
 
+            $output_style = isset($_REQUEST['output_style']) ? sanitize_text_field($_REQUEST['output_style']) : 'raw';
+            
             if ($export_format === 'csv') {
                 $flat = ['title' => $item['title'], 'format' => $item['format']];
                 if (is_array($item['data'])) {
@@ -433,10 +492,8 @@ function frontend_learning_data_export_handler()
                 }
                 $export_data[] = $flat;
             } else {
-                // jsonl, json の場合は data の中身をそのまま（または平坦化して）使用
-                // 一般的なLLMデータセットは title 等を含まないことが多いが、一旦ラップする
-                $merged = array_merge(['title' => $item['title']], is_array($item['data']) ? $item['data'] : ['text' => $item['data']]);
-                $export_data[] = $merged;
+                $formatted_item = fourier_format_learning_data($item, $output_style);
+                $export_data[] = $formatted_item;
             }
         }
     }

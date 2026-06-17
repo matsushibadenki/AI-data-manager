@@ -401,6 +401,15 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                         </div>
                     </div>
 
+                    <div class="filter-group" style="margin-top: 1rem;">
+                        <span class="filter-label"><?php echo esc_html__('出力構造 (JSON/JSONLのみ)', 'fourier'); ?></span>
+                        <div class="radio-group">
+                            <label><input type="radio" name="output_style" value="raw" checked> Raw (そのまま出力)</label>
+                            <label><input type="radio" name="output_style" value="transformer"> 一般的なTransformer (text結合)</label>
+                            <label><input type="radio" name="output_style" value="sara"> sara向け (Event構造)</label>
+                        </div>
+                    </div>
+
                     <div style="margin-top: 2rem;">
                         <button type="submit" class="btn-black">
                             <span class="material-symbols-outlined">download</span>

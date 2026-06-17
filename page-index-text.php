@@ -277,6 +277,25 @@ get_header();
         top: 0;
         z-index: 10;
         box-shadow: 0 1px 0 var(--border-subtle, #ccc);
+        /* Resize functionality */
+        resize: horizontal;
+        overflow: hidden;
+    }
+
+    /* Fixed minimal width for ID, Date, and Action */
+    .data-sheet th:nth-child(1),
+    .data-sheet td:nth-child(1),
+    .data-sheet th:nth-child(2),
+    .data-sheet td:nth-child(2),
+    .data-sheet th.col-action,
+    .data-sheet td.col-action {
+        width: 1%;
+        white-space: nowrap;
+    }
+    .data-sheet th:nth-child(1),
+    .data-sheet th:nth-child(2),
+    .data-sheet th.col-action {
+        resize: none;
     }
 
     .data-sheet td {
@@ -795,8 +814,20 @@ get_header();
                 tab.classList.add('active');
                 const targetId = tab.getAttribute('data-target');
                 document.getElementById(targetId).classList.add('active');
+                
+                // 選択中のタブを保存
+                localStorage.setItem('activeLearningTab', targetId);
             });
         });
+
+        // 保存されたタブがあれば復元
+        const activeTabId = localStorage.getItem('activeLearningTab');
+        if (activeTabId) {
+            const tabToActivate = document.querySelector(`.learning-tab[data-target="${activeTabId}"]`);
+            if (tabToActivate) {
+                tabToActivate.click();
+            }
+        }
 
         // 動的にアクション列を追加
         const tables = document.querySelectorAll('.data-sheet');
@@ -807,11 +838,10 @@ get_header();
             if (theadTr) {
                 const th = document.createElement('th');
                 th.textContent = 'アクション';
-                th.style.width = '180px';
+                th.className = 'col-action';
                 th.style.textAlign = 'center';
                 th.style.verticalAlign = 'middle';
                 th.style.padding = '0.5rem';
-                th.style.whiteSpace = 'nowrap';
                 theadTr.appendChild(th);
             }
 
@@ -827,6 +857,7 @@ get_header();
                 if (tdFirst) {
                     const id = tdFirst.textContent.trim();
                     const td = document.createElement('td');
+                    td.className = 'col-action';
                     td.style.textAlign = 'center';
                     td.style.verticalAlign = 'middle';
                     td.style.padding = '0.2rem';

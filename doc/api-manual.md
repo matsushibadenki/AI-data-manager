@@ -20,6 +20,10 @@
 - **認証ヘッダー**: `Authorization: Bearer <あなたのトークン>`
 - **クエリパラメータ**:
   - `format` (任意): 取得したいデータのフォーマットを絞り込みます（例: `dpo`, `instruction`, `chatml`）。カンマ区切りで複数指定（例: `dpo,instruction`）も可能です。指定がない場合は全件取得します。
+  - `output_style` (任意): 出力データの構造を指定します（例: `raw`, `transformer`, `sara`）。指定がない場合は `raw` となります。
+    - `raw`: データベースに保存された元の形式（タイトルやフォーマットを含めた形式）で出力します。
+    - `transformer`: 一般的なTransformerの学習（Causal LM SFT）で扱いやすいよう、1つの `text` キーに結合された形式で出力します。
+    - `sara`: SARA Engine向けの Event Memory（イベント構造）形式で出力します。
 
 ### 1.3. 出力されるデータ構造 (JSON)
 AIのデータセットライブラリ（Hugging Face `datasets` など）でパースしやすいよう、フラットなJSON配列として出力されます。
