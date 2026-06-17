@@ -39,8 +39,7 @@ get_header();
 .dynamic-row { display: flex; gap: 1rem; margin-bottom: 1rem; align-items: flex-start; }
 .dynamic-row select { width: 150px; }
 .dynamic-row textarea { flex-grow: 1; }
-.btn-remove-row { background: transparent; color: var(--error, #ef4444); border: 1px solid var(--error, #ef4444); padding: 0.5rem; border-radius: 4px; cursor: pointer; }
-.btn-add-row { background: var(--bg-surface-hover, #f5f5f5); color: var(--text-primary, #000); border: 1px dashed var(--border-subtle, #ccc); padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 1rem; }
+
 </style>
 
 <main>
@@ -69,7 +68,7 @@ get_header();
                             <label for="password"><?php echo esc_html__('パスワード', 'fourier'); ?></label>
                             <input type="password" name="password" id="password" class="upload-form-input" required autocomplete="current-password" />
                         </div>
-                        <button type="submit" name="upload_login_submit" class="btn-black upload-login-btn">
+                        <button type="submit" name="upload_login_submit" class="btn-base btn-primary upload-login-btn">
                             <?php echo esc_html__('ログイン', 'fourier'); ?>
                         </button>
                     </form>
@@ -174,7 +173,7 @@ get_header();
 
                     <div id="tab-chatml" class="learning-tab-content" data-format="chatml">
                         <div id="chatml-container"></div>
-                        <button type="button" id="btn-add-chatml" class="btn-add-row">+ メッセージを追加</button>
+                        <button type="button" id="btn-add-chatml" class="btn-base btn-secondary" style="width: 100%; margin-top: 1rem; border-style: dashed;">+ メッセージを追加</button>
                     </div>
 
                     <div id="tab-bbox" class="learning-tab-content" data-format="bbox">
@@ -207,7 +206,7 @@ get_header();
                     <span class="material-symbols-outlined upload-icon">cloud_upload</span>
                     <p class="drop-zone-text"><?php echo esc_html__('ここにファイルをドラッグ＆ドロップ', 'fourier'); ?></p>
                     <span class="drop-zone-or"><?php echo esc_html__('または', 'fourier'); ?></span>
-                    <button type="button" id="browse-btn" class="btn-black"><?php echo esc_html__('ファイルを選択', 'fourier'); ?></button>
+                    <button type="button" id="browse-btn" class="btn-base btn-primary"><?php echo esc_html__('ファイルを選択', 'fourier'); ?></button>
                     <input type="file" id="file-input" multiple accept="image/*,video/*,application/pdf,audio/*" style="display: none;" />
                 </div>
             </div>
@@ -216,15 +215,10 @@ get_header();
             <div id="upload-preview-container" class="upload-preview-container" style="display: none;">
                 <h3><?php echo esc_html__('選択されたファイル', 'fourier'); ?></h3>
                 <div id="preview-list" class="preview-list"></div>
-                <button type="button" id="register-btn" class="btn-black" style="margin-top: 1rem; width: 100%; justify-content: center; font-size: 1.1rem; padding: 1rem; border-radius: var(--radius-md);"><?php echo esc_html__('データと画像を登録', 'fourier'); ?></button>
+                <button type="button" id="register-btn" class="btn-base btn-primary" style="margin-top: 1rem; width: 100%; justify-content: center; font-size: 1.1rem; padding: 1rem; border-radius: var(--radius-md);"><?php echo esc_html__('データと画像を登録', 'fourier'); ?></button>
             </div>
 
-            <div class="back-home">
-                <a href="<?php echo esc_url(home_url('/')); ?>" class="btn-black">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                    <?php echo esc_html__('フロントページに戻る', 'fourier'); ?>
-                </a>
-            </div>
+
         <?php endif; ?>
     </div>
 </main>
@@ -278,9 +272,9 @@ get_header();
                 row.innerHTML = `
                     <select class="upload-form-input ${roleClass}">${options}</select>
                     <textarea class="upload-form-input ${contentClass}" rows="2"></textarea>
-                    <button type="button" class="btn-remove-row" title="削除"><span class="material-symbols-outlined">delete</span></button>
+                    <button type="button" class="btn-base btn-danger" style="padding: 0.5rem; border-radius: 4px;" title="削除"><span class="material-symbols-outlined">delete</span></button>
                 `;
-                row.querySelector('.btn-remove-row').addEventListener('click', () => row.remove());
+                row.querySelector('.btn-danger').addEventListener('click', () => row.remove());
                 container.appendChild(row);
             }
 

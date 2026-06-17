@@ -81,7 +81,7 @@ if (!empty($hash)) {
                         <label for="download_password" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('パスワード', 'fourier'); ?></label>
                         <input type="password" name="download_password" id="download_password" class="upload-form-input" required autofocus style="background-color: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 0.75rem 1rem; color: var(--text-primary); font-size: 0.95rem; outline: none; transition: all var(--transition-base);" />
                     </div>
-                    <button type="submit" class="btn-black" style="width: 100%; padding: 0.85rem; font-size: 0.9rem; font-weight: 500; justify-content: center; margin: 0.5rem 0 0 0;">
+                    <button type="submit" class="btn-base btn-primary" style="width: 100%; padding: 0.85rem; font-size: 0.9rem; font-weight: 500; justify-content: center; margin: 0.5rem 0 0 0;">
                         <?php echo esc_html__('認証', 'fourier'); ?>
                     </button>
                 </form>
@@ -144,7 +144,7 @@ if (!empty($hash)) {
 
     </div>
 </article>
-<a href="javascript:history.back();" target="_top" class="btn-black"><?php echo esc_html__('前のページに戻る', 'fourier'); ?><span class="material-symbols-outlined">undo</span></a>
+<a href="javascript:history.back();" target="_top" class="btn-base btn-primary"><?php echo esc_html__('前のページに戻る', 'fourier'); ?><span class="material-symbols-outlined">undo</span></a>
 
 </main>
 <?php

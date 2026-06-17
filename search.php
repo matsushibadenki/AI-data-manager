@@ -155,7 +155,7 @@ get_header();
         endif;
         ?>
     </div>
-    <a href="<?php echo esc_url(home_url('/')); ?>" target="_top" class="btn-black"><?php echo esc_html__('戻る', 'fourier'); ?><span class="material-symbols-outlined">undo</span></a>
+    <a href="<?php echo esc_url(home_url('/')); ?>" target="_top" class="btn-base btn-primary"><?php echo esc_html__('戻る', 'fourier'); ?><span class="material-symbols-outlined">undo</span></a>
 </main>
 
 <?php

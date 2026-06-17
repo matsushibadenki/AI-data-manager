@@ -232,7 +232,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 <form method="post" action="">
                     <input type="text" name="username" class="auth-input" placeholder="Username" required autofocus>
                     <input type="password" name="password" class="auth-input" placeholder="Password" required>
-                    <button type="submit" name="login_submit" class="btn-black" style="width:100%;">
+                    <button type="submit" name="login_submit" class="btn-base btn-primary" style="width:100%;">
                         <?php echo esc_html__('ログイン', 'fourier'); ?>
                     </button>
                 </form>
@@ -268,7 +268,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                     <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0.5rem;">
                         <?php echo esc_html__('対応フォーマット: JSONL, JSON, CSV', 'fourier'); ?>
                     </p>
-                    <button class="btn-black" style="margin-top: 1rem;" onclick="document.getElementById('file-input').click()">
+                    <button class="btn-base btn-primary" style="margin-top: 1rem;" onclick="document.getElementById('file-input').click()">
                         <?php echo esc_html__('ファイルを選択', 'fourier'); ?>
                     </button>
                     <input type="file" id="file-input" accept=".jsonl,.json,.csv" />
@@ -350,7 +350,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                     </div>
 
                     <div style="text-align: center; margin-top: 2rem;">
-                        <button type="button" id="btn-execute-import" class="btn-black" style="background: var(--text-primary); color: #fff;">
+                        <button type="button" id="btn-execute-import" class="btn-base btn-primary" style="background: var(--text-primary); color: #fff;">
                             <span class="material-symbols-outlined">publish</span>
                             <?php echo esc_html__('インポートを実行', 'fourier'); ?>
                         </button>
@@ -411,7 +411,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                     </div>
 
                     <div style="margin-top: 2rem;">
-                        <button type="submit" class="btn-black">
+                        <button type="submit" class="btn-base btn-primary">
                             <span class="material-symbols-outlined">download</span>
                             <?php echo esc_html__('ダウンロード', 'fourier'); ?>
                         </button>
@@ -482,7 +482,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             .then(r => r.json())
             .then(res => {
                 // reset dropzone
-                dropZone.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span><p style="margin:0; font-weight:600; font-size:1.1rem;">ここにファイルをドラッグ＆ドロップ</p><p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0.5rem;">対応フォーマット: JSONL, JSON, CSV</p><button class="btn-black" style="margin-top: 1rem;" onclick="document.getElementById(\'file-input\').click()">ファイルを選択</button>';
+                dropZone.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span><p style="margin:0; font-weight:600; font-size:1.1rem;">ここにファイルをドラッグ＆ドロップ</p><p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0.5rem;">対応フォーマット: JSONL, JSON, CSV</p><button class="btn-base btn-primary" style="margin-top: 1rem;" onclick="document.getElementById(\'file-input\').click()">ファイルを選択</button>';
                 
                 if (!res.success) {
                     alert(res.data.message || 'エラーが発生しました');

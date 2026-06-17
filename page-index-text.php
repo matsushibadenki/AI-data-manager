@@ -95,109 +95,22 @@ get_header();
     }
 
     .site-content-wrapper,
-    #primary,
-    .upload-page-container {
+    #primary {
         max-width: 100% !important;
         width: 100% !important;
         padding: 2rem 5% !important;
         box-sizing: border-box;
     }
 
-    button.btn-black {
-        display: inline-flex;
-        justify-content: center;
-        align-items: center;
-        gap: 0.4rem;
-        font-size: 0.85rem;
-        line-height: 1;
-        text-decoration: none;
-        background-color: var(--bg-surface, #fff);
-        color: var(--text-primary, #333);
-        border: 1px solid var(--border-subtle, #ccc);
-        padding: 0.7rem 1.8rem;
-        border-radius: var(--radius-full, 999px);
-        font-weight: 400;
-        letter-spacing: 0.03em;
-        transition: all var(--transition-base, 0.2s);
-        cursor: pointer;
-    }
-    button.btn-black:hover:not(:disabled) {
-        color: var(--accent, #C9A96E);
-        border-color: var(--accent, #C9A96E);
-        background-color: var(--accent-subtle, rgba(201,169,110,0.1));
-        box-shadow: var(--shadow-gold, 0 2px 8px rgba(201,169,110,0.2));
-        transform: translateY(-1px);
-    }
-    button.btn-black:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
 
-    .action-btn {
-        display: inline-flex;
-        justify-content: center;
-        align-items: center;
-        width: 2.2rem;
-        height: 2.2rem;
-        padding: 0;
-        margin: 0;
-        border-radius: 8px;
-        text-decoration: none;
-        transition: all 0.2s ease;
-        cursor: pointer;
-        border: none;
-        background: transparent;
-    }
-    .action-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.08);
-    }
-    .action-btn span {
-        font-size: 1.2rem !important;
-        line-height: 1;
-    }
 
     /* 編集ボタン (グレー) */
-    .action-btn.btn-edit {
-        background: var(--bg-surface, #fff);
-        border: 1px solid var(--border-subtle, #e0e0e0);
-        color: var(--text-primary, #333);
-    }
-    .action-btn.btn-edit:hover {
-        background: #f5f5f5;
-        border-color: #ccc;
-        color: var(--text-primary, #333);
-    }
 
     /* バリエーション生成ボタン (ゴールド) */
-    .action-btn.btn-open-var {
-        background: rgba(201, 169, 110, 0.15);
-        color: #C9A96E;
-    }
-    .action-btn.btn-open-var:hover {
-        background: #C9A96E;
-        color: #fff;
-    }
 
     /* データ蒸留ボタン (パープル) */
-    .action-btn.btn-open-distill {
-        background: rgba(107, 76, 154, 0.15);
-        color: #6b4c9a;
-    }
-    .action-btn.btn-open-distill:hover {
-        background: #6b4c9a;
-        color: #fff;
-    }
 
     /* 削除ボタン (レッド) */
-    .action-btn.btn-delete-data {
-        background: rgba(227, 52, 47, 0.15);
-        color: #e3342f;
-    }
-    .action-btn.btn-delete-data:hover {
-        background: #e3342f;
-        color: #fff;
-    }
 
     /* ヘッダー周りの調整 */
     .full-screen-header {
@@ -385,8 +298,8 @@ get_header();
             <div id="var-status-message" style="margin-bottom: 1rem; font-size: 0.9rem; font-weight: bold;"></div>
 
             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                <button type="button" id="btn-var-cancel" class="btn-black" style="opacity: 0.7; background: #666;">キャンセル</button>
-                <button type="button" id="btn-var-submit" class="btn-black">生成して保存</button>
+                <button type="button" id="btn-var-cancel" class="btn-base btn-primary" style="opacity: 0.7; background: #666;">キャンセル</button>
+                <button type="button" id="btn-var-submit" class="btn-base btn-primary">生成して保存</button>
             </div>
         </div>
     </div>
@@ -424,13 +337,13 @@ get_header();
             <div id="distill-status-message" style="margin-bottom: 1rem; font-size: 0.9rem; font-weight: bold;"></div>
 
             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                <button type="button" id="btn-distill-cancel" class="btn-black" style="opacity: 0.7; background: #666;">キャンセル</button>
-                <button type="button" id="btn-distill-submit" class="btn-black">蒸留して保存</button>
+                <button type="button" id="btn-distill-cancel" class="btn-base btn-primary" style="opacity: 0.7; background: #666;">キャンセル</button>
+                <button type="button" id="btn-distill-submit" class="btn-base btn-primary">蒸留して保存</button>
             </div>
         </div>
     </div>
 
-    <div id="primary" class="upload-page-container">
+    <div id="primary">
         <?php if (!$is_authenticated) : ?>
             <!-- ログイン画面 -->
             <div class="upload-login-wrapper">
@@ -455,7 +368,7 @@ get_header();
                             <label for="password"><?php echo esc_html__('パスワード', 'fourier'); ?></label>
                             <input type="password" name="password" id="password" class="upload-form-input" required />
                         </div>
-                        <button type="submit" name="upload_login_submit" class="btn-black upload-login-btn">
+                        <button type="submit" name="upload_login_submit" class="btn-base btn-primary upload-login-btn">
                             <?php echo esc_html__('ログイン', 'fourier'); ?>
                         </button>
                     </form>
@@ -791,12 +704,7 @@ get_header();
 
             </div>
 
-            <div class="back-home">
-                <a href="<?php echo esc_url(home_url('/')); ?>" class="btn-black">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                    <?php echo esc_html__('フロントページに戻る', 'fourier'); ?>
-                </a>
-            </div>
+
         <?php endif; ?>
     </div>
 </main>

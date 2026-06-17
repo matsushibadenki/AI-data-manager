@@ -356,7 +356,7 @@ get_header();
                 <form method="post" action="">
                     <input type="text" name="username" class="auth-input" placeholder="Username" required autofocus>
                     <input type="password" name="password" class="auth-input" placeholder="Password" required>
-                    <button type="submit" name="login_submit" class="btn-black" style="width:100%;">
+                    <button type="submit" name="login_submit" class="btn-base btn-primary" style="width:100%;">
                         <?php echo esc_html__('ログイン', 'fourier'); ?>
                     </button>
                 </form>
@@ -467,7 +467,7 @@ get_header();
                 <p style="font-size: 0.9rem; color: #7f1d1d; margin-bottom: 1rem;">
                     <?php echo esc_html__('アカウントを削除すると、紐づくすべてのデータが完全に消去され、復元することはできません。', 'fourier'); ?>
                 </p>
-                <button type="button" id="btn-delete-account" class="btn-black" style="background: #ef4444; border-color: #ef4444; color: #fff;">
+                <button type="button" id="btn-delete-account" class="btn-base btn-primary" style="background: #ef4444; border-color: #ef4444; color: #fff;">
                     <span class="material-symbols-outlined">delete_forever</span>
                     <?php echo esc_html__('アカウントとデータを削除', 'fourier'); ?>
                 </button>

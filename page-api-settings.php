@@ -120,21 +120,7 @@ get_header();
         box-shadow: 0 0 0 2px rgba(201, 169, 110, 0.2);
     }
 
-    .btn-save {
-        background-color: var(--text-primary, #111);
-        color: #fff;
-        border: none;
-        padding: 0.8rem 2rem;
-        font-size: 1rem;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: opacity 0.2s;
-        font-weight: 600;
-    }
 
-    .btn-save:hover {
-        opacity: 0.8;
-    }
 
     .help-text {
         font-size: 0.85rem;
@@ -165,7 +151,7 @@ get_header();
                 <input type="text" id="openai_model" name="openai_model" value="<?php echo esc_attr($openai_mod); ?>" placeholder="gpt-5.5, gpt-3.5-turbo">
             </div>
             <div style="margin-top: 1rem;">
-                <button type="button" class="btn-test-connection" data-provider="openai" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <button type="button" class="btn-base btn-secondary" data-provider="openai" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
                 <span class="test-result" id="test-result-openai" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
@@ -181,7 +167,7 @@ get_header();
                 <input type="text" id="gemini_model" name="gemini_model" value="<?php echo esc_attr($gemini_mod); ?>" placeholder="gemini-3.1-pro-preview">
             </div>
             <div style="margin-top: 1rem;">
-                <button type="button" class="btn-test-connection" data-provider="gemini" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <button type="button" class="btn-base btn-secondary" data-provider="gemini" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
                 <span class="test-result" id="test-result-gemini" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
@@ -198,7 +184,7 @@ get_header();
                 <input type="text" id="ollama_model" name="ollama_model" value="<?php echo esc_attr($ollama_mod); ?>" placeholder="gemma4:12b-mlx, gemma, etc.">
             </div>
             <div style="margin-top: 1rem;">
-                <button type="button" class="btn-test-connection" data-provider="ollama" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <button type="button" class="btn-base btn-secondary" data-provider="ollama" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
                 <span class="test-result" id="test-result-ollama" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
@@ -215,7 +201,7 @@ get_header();
                 <input type="text" id="custom_model" name="custom_model" value="<?php echo esc_attr($custom_mod); ?>" placeholder="モデル名（サーバー側で固定の場合は空でも可）">
             </div>
             <div style="margin-top: 1rem;">
-                <button type="button" class="btn-test-connection" data-provider="custom" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <button type="button" class="btn-base btn-secondary" data-provider="custom" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
                 <span class="test-result" id="test-result-custom" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
@@ -234,7 +220,7 @@ get_header();
         </div>
 
         <div style="text-align: right; margin-bottom: 4rem;">
-            <button type="submit" name="save_api_settings" class="btn-save"><?php echo esc_html__('設定を保存', 'fourier'); ?></button>
+            <button type="submit" name="save_api_settings" class="btn-base btn-primary"><?php echo esc_html__('設定を保存', 'fourier'); ?></button>
         </div>
     </form>
 

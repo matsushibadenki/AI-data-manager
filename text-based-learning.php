@@ -79,24 +79,7 @@ get_header();
 .dynamic-row textarea {
     flex-grow: 1;
 }
-.btn-remove-row {
-    background: transparent;
-    color: var(--error, #ef4444);
-    border: 1px solid var(--error, #ef4444);
-    padding: 0.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-}
-.btn-add-row {
-    background: var(--bg-surface-hover, #f5f5f5);
-    color: var(--text-primary, #000);
-    border: 1px dashed var(--border-subtle, #ccc);
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    width: 100%;
-    margin-top: 1rem;
-}
+
 .search-section {
     background: var(--bg-surface, #fff);
     padding: 1.5rem;
@@ -372,7 +355,7 @@ button.btn-black span.material-symbols-outlined {
                             <label for="password"><?php echo esc_html__('パスワード', 'fourier'); ?></label>
                             <input type="password" name="password" id="password" class="upload-form-input" required autocomplete="current-password" />
                         </div>
-                        <button type="submit" name="upload_login_submit" class="btn-black upload-login-btn">
+                        <button type="submit" name="upload_login_submit" class="btn-base btn-primary upload-login-btn">
                             <?php echo esc_html__('ログイン', 'fourier'); ?>
                         </button>
                     </form>
@@ -397,7 +380,7 @@ button.btn-black span.material-symbols-outlined {
                 <h3><?php echo esc_html__('データ検索', 'fourier'); ?></h3>
                 <div style="display: flex; gap: 1rem; margin-top: 1rem;">
                     <input type="text" id="search-keyword" class="upload-form-input" placeholder="<?php echo esc_attr__('キーワードを入力...', 'fourier'); ?>" style="flex-grow: 1;" />
-                    <button type="button" id="btn-search" class="btn-black">
+                    <button type="button" id="btn-search" class="btn-base btn-primary">
                         <span class="material-symbols-outlined">search</span>
                         <?php echo esc_html__('検索', 'fourier'); ?>
                     </button>
@@ -511,7 +494,7 @@ button.btn-black span.material-symbols-outlined {
                     <div id="chatml-container">
                         <!-- 動的追加行 -->
                     </div>
-                    <button type="button" id="btn-add-chatml" class="btn-add-row">+ メッセージを追加</button>
+                    <button type="button" id="btn-add-chatml" class="btn-base btn-secondary" style="width: 100%; margin-top: 1rem; border-style: dashed;">+ メッセージを追加</button>
                 </div>
 
                 <!-- 4. ShareGPT形式 -->
@@ -520,7 +503,7 @@ button.btn-black span.material-symbols-outlined {
                     <div id="sharegpt-container">
                         <!-- 動的追加行 -->
                     </div>
-                    <button type="button" id="btn-add-sharegpt" class="btn-add-row">+ 会話を追加</button>
+                    <button type="button" id="btn-add-sharegpt" class="btn-base btn-secondary" style="width: 100%; margin-top: 1rem; border-style: dashed;">+ 会話を追加</button>
                 </div>
 
                 <!-- 5. 思考過程(CoT) -->
@@ -611,7 +594,7 @@ button.btn-black span.material-symbols-outlined {
                         <textarea id="scrape-prompt" class="upload-form-input" rows="3" placeholder="例: 内容を小学生にもわかるように易しく解説するQAセットを作成して。"></textarea>
                     </div>
                     <div style="margin-top: 1.5rem; text-align: center;">
-                        <button type="button" id="btn-scrape-submit" class="btn-black" style="background: var(--accent); border-color: var(--accent); color: var(--text-inverse);">
+                        <button type="button" id="btn-scrape-submit" class="btn-base btn-primary" style="background: var(--accent); border-color: var(--accent); color: var(--text-inverse);">
                             <span class="material-symbols-outlined">language</span> 自動取得・生成して登録
                         </button>
                     </div>
@@ -621,7 +604,7 @@ button.btn-black span.material-symbols-outlined {
 
                 <div style="text-align: center; margin-top: 2rem;">
                     <input type="hidden" id="edit-post-id" value="" />
-                    <button type="button" id="btn-save-data" class="btn-black" style="margin: 0 auto;">
+                    <button type="button" id="btn-save-data" class="btn-base btn-primary" style="margin: 0 auto;">
                         <span class="material-symbols-outlined">save</span>
                         <?php echo esc_html__('データを登録', 'fourier'); ?>
                     </button>
@@ -629,12 +612,7 @@ button.btn-black span.material-symbols-outlined {
 
             </div>
 
-            <div class="back-home">
-                <a href="<?php echo esc_url(home_url('/')); ?>" class="btn-black">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                    <?php echo esc_html__('フロントページに戻る', 'fourier'); ?>
-                </a>
-            </div>
+
 
             <!-- 編集モーダル -->
             <div class="edit-modal-overlay" id="edit-modal-overlay">
@@ -707,11 +685,11 @@ button.btn-black span.material-symbols-outlined {
                     </details>
                     <div id="edit-status-message" class="status-msg" style="margin-top: 1rem;"></div>
                     <div style="text-align: center; margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
-                        <button type="button" id="btn-edit-save" class="btn-black">
+                        <button type="button" id="btn-edit-save" class="btn-base btn-primary">
                             <span class="material-symbols-outlined">save</span>
                             <?php echo esc_html__('更新', 'fourier'); ?>
                         </button>
-                        <button type="button" id="btn-edit-cancel" class="btn-black" style="opacity: 0.7;">
+                        <button type="button" id="btn-edit-cancel" class="btn-base btn-primary" style="opacity: 0.7;">
                             <?php echo esc_html__('キャンセル', 'fourier'); ?>
                         </button>
                     </div>
@@ -763,9 +741,9 @@ button.btn-black span.material-symbols-outlined {
                     <option value="assistant" ${role === 'assistant' ? 'selected' : ''}>assistant</option>
                 </select>
                 <textarea class="upload-form-input chatml-content" rows="2" placeholder="メッセージを入力...">${content}</textarea>
-                <button type="button" class="btn-remove-row" title="削除"><span class="material-symbols-outlined">delete</span></button>
+                <button type="button" class="btn-base btn-danger" style="padding: 0.5rem; border-radius: 4px;" title="削除"><span class="material-symbols-outlined">delete</span></button>
             `;
-            row.querySelector('.btn-remove-row').addEventListener('click', () => row.remove());
+            row.querySelector('.btn-danger').addEventListener('click', () => row.remove());
             chatmlContainer.appendChild(row);
         }
         
@@ -790,9 +768,9 @@ button.btn-black span.material-symbols-outlined {
                     <option value="gpt" ${from === 'gpt' ? 'selected' : ''}>gpt</option>
                 </select>
                 <textarea class="upload-form-input sharegpt-value" rows="2" placeholder="会話を入力...">${value}</textarea>
-                <button type="button" class="btn-remove-row" title="削除"><span class="material-symbols-outlined">delete</span></button>
+                <button type="button" class="btn-base btn-danger" style="padding: 0.5rem; border-radius: 4px;" title="削除"><span class="material-symbols-outlined">delete</span></button>
             `;
-            row.querySelector('.btn-remove-row').addEventListener('click', () => row.remove());
+            row.querySelector('.btn-danger').addEventListener('click', () => row.remove());
             sharegptContainer.appendChild(row);
         }
         
@@ -1012,7 +990,7 @@ button.btn-black span.material-symbols-outlined {
                                     <button type="button" onclick="duplicateData(${post.ID})">
                                         <span class="material-symbols-outlined" style="font-size:0.9rem;">content_copy</span> 複製
                                     </button>
-                                    <button type="button" class="btn-danger" onclick="deleteData(${post.ID}, this)">
+                                    <button type="button" class="btn-base btn-danger" onclick="deleteData(${post.ID}, this)">
                                         <span class="material-symbols-outlined" style="font-size:0.9rem;">delete</span> 削除
                                     </button>
                                 </div>

@@ -88,29 +88,7 @@ get_header();
     box-shadow: 0 0 0 3px rgba(201, 169, 110, 0.2);
 }
 
-.btn-black {
-    background: var(--text-primary, #111);
-    color: var(--bg-surface, #fff);
-    border: none;
-    padding: 0.8rem 2rem;
-    font-size: 0.95rem;
-    border-radius: var(--radius-full, 9999px);
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-}
 
-.btn-black:hover {
-    opacity: 0.8;
-}
-
-.btn-black:disabled {
-    background: var(--border-subtle, #ccc);
-    cursor: not-allowed;
-}
 
 .status-msg {
     margin-top: 1rem;
@@ -199,7 +177,7 @@ get_header();
                             <label for="password"><?php echo esc_html__('パスワード', 'fourier'); ?></label>
                             <input type="password" name="password" id="password" class="upload-form-input" required autocomplete="current-password" />
                         </div>
-                        <button type="submit" name="upload_login_submit" class="btn-black upload-login-btn">
+                        <button type="submit" name="upload_login_submit" class="btn-base btn-primary upload-login-btn">
                             <?php echo esc_html__('ログイン', 'fourier'); ?>
                         </button>
                     </form>
@@ -258,8 +236,7 @@ get_header();
                     </div>
 
                     <div style="text-align: right;">
-                        <button type="button" id="btn-start-crawl" class="btn-black">
-                            <span class="material-symbols-outlined">smart_toy</span>
+                        <button type="button" id="btn-start-crawl" class="btn-base btn-primary">
                             <?php echo esc_html__('クロール開始', 'fourier'); ?>
                         </button>
                     </div>

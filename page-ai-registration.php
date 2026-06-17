@@ -79,24 +79,7 @@ get_header();
 .dynamic-row textarea {
     flex-grow: 1;
 }
-.btn-remove-row {
-    background: transparent;
-    color: var(--error, #ef4444);
-    border: 1px solid var(--error, #ef4444);
-    padding: 0.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-}
-.btn-add-row {
-    background: var(--bg-surface-hover, #f5f5f5);
-    color: var(--text-primary, #000);
-    border: 1px dashed var(--border-subtle, #ccc);
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    width: 100%;
-    margin-top: 1rem;
-}
+
 .search-section {
     background: var(--bg-surface, #fff);
     padding: 1.5rem;
@@ -372,7 +355,7 @@ button.btn-black span.material-symbols-outlined {
                             <label for="password"><?php echo esc_html__('パスワード', 'fourier'); ?></label>
                             <input type="password" name="password" id="password" class="upload-form-input" required autocomplete="current-password" />
                         </div>
-                        <button type="submit" name="upload_login_submit" class="btn-black upload-login-btn">
+                        <button type="submit" name="upload_login_submit" class="btn-base btn-primary upload-login-btn">
                             <?php echo esc_html__('ログイン', 'fourier'); ?>
                         </button>
                     </form>
@@ -495,7 +478,7 @@ button.btn-black span.material-symbols-outlined {
                         <textarea id="scrape-prompt" class="upload-form-input" rows="3" placeholder="例: 内容を小学生にもわかるように易しく解説するQAセットを作成して。"></textarea>
                     </div>
                     <div style="margin-top: 1.5rem; text-align: center;">
-                        <button type="button" id="btn-scrape-submit" class="btn-black" style="background: var(--accent); border-color: var(--accent); color: var(--text-inverse);">
+                        <button type="button" id="btn-scrape-submit" class="btn-base btn-primary" style="background: var(--accent); border-color: var(--accent); color: var(--text-inverse);">
                             <span class="material-symbols-outlined">language</span> 自動取得・生成して登録
                         </button>
                     </div>
@@ -541,7 +524,7 @@ button.btn-black span.material-symbols-outlined {
                         <textarea id="distill-prompt" class="upload-form-input" rows="2" placeholder="例: 出力は小学生でもわかる言葉遣いにしてください。"></textarea>
                     </div>
                     <div style="margin-top: 1.5rem; text-align: center;">
-                        <button type="button" id="btn-distill-submit" class="btn-black" style="background: var(--accent); border-color: var(--accent); color: var(--text-inverse);">
+                        <button type="button" id="btn-distill-submit" class="btn-base btn-primary" style="background: var(--accent); border-color: var(--accent); color: var(--text-inverse);">
                             <span class="material-symbols-outlined">science</span> 蒸留処理を実行して登録
                         </button>
                     </div>
@@ -553,12 +536,7 @@ button.btn-black span.material-symbols-outlined {
 
             </div>
 
-            <div class="back-home">
-                <a href="<?php echo esc_url(home_url('/')); ?>" class="btn-black">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                    <?php echo esc_html__('フロントページに戻る', 'fourier'); ?>
-                </a>
-            </div>
+
 
             <?php endif; ?>
     </div>
@@ -805,7 +783,7 @@ button.btn-black span.material-symbols-outlined {
                                     <button type="button" onclick="duplicateData(${post.ID})">
                                         <span class="material-symbols-outlined" style="font-size:0.9rem;">content_copy</span> 複製
                                     </button>
-                                    <button type="button" class="btn-danger" onclick="deleteData(${post.ID}, this)">
+                                    <button type="button" class="btn-base btn-danger" onclick="deleteData(${post.ID}, this)">
                                         <span class="material-symbols-outlined" style="font-size:0.9rem;">delete</span> 削除
                                     </button>
                                 </div>

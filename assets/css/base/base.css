@@ -296,3 +296,118 @@ h1.tiltetext>span.private-title {
     -webkit-overflow-scrolling: touch;
   }
 }
+/*--------------------------------------------------------------
+  Global Button Styles
+--------------------------------------------------------------*/
+.btn-base {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.95rem;
+    line-height: 1;
+    text-decoration: none;
+    border: 1px solid transparent;
+    padding: 0.8rem 2rem;
+    border-radius: var(--radius-full, 9999px);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    transition: all var(--transition-base, 0.2s);
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.btn-base > span.material-symbols-outlined {
+    font-size: 1.1rem !important;
+    line-height: 1;
+    color: inherit;
+}
+
+.btn-base:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Primary Button (Black with Gold hover) */
+.btn-primary, .btn-black {
+    background-color: var(--text-primary, #111);
+    color: var(--bg-surface, #fff);
+    border-color: var(--text-primary, #111);
+}
+
+.btn-primary:hover:not(:disabled), .btn-black:hover:not(:disabled) {
+    color: var(--accent, #C9A96E);
+    border-color: var(--accent, #C9A96E);
+    background-color: var(--accent-subtle, rgba(201,169,110,0.1));
+    box-shadow: var(--shadow-gold, 0 2px 8px rgba(201,169,110,0.2));
+    transform: translateY(-1px);
+}
+
+/* Secondary Button (Outline or Grey) */
+.btn-secondary {
+    background-color: transparent;
+    color: var(--text-primary, #333);
+    border-color: var(--border-subtle, #ccc);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    color: var(--accent, #C9A96E);
+    border-color: var(--accent, #C9A96E);
+    background-color: var(--accent-subtle, rgba(201,169,110,0.1));
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transform: translateY(-1px);
+}
+
+/* Danger Button (Red) */
+.btn-danger {
+    background-color: transparent;
+    color: #ef4444;
+    border-color: #ef4444;
+}
+
+.btn-danger:hover:not(:disabled) {
+    color: #fff;
+    background-color: #ef4444;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Action Button (Small icon button for tables) */
+.action-btn {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    padding: 0;
+    margin: 0;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-primary, #333);
+}
+
+.action-btn span {
+    font-size: 1.2rem !important;
+    line-height: 1;
+}
+
+.action-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+}
+
+.btn-edit:hover { background-color: #f3f4f6; color: #2563eb; }
+.btn-open-var:hover { background-color: #fdf4ff; color: #c026d3; }
+.btn-open-distill:hover { background-color: #f0fdf4; color: #16a34a; }
+.btn-delete-data:hover { background-color: #fef2f2; color: #dc2626; }
+
+.btn-edit { color: #6b7280; }
+.btn-open-var { color: #d946ef; }
+.btn-open-distill { color: #22c55e; }
+.btn-delete-data { color: #ef4444; }

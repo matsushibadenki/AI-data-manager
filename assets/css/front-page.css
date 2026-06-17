@@ -738,41 +738,12 @@ span.page-numbers.current {
    戻るボタン — ゴールドアクセント
    ───────────────────────────────────────────── */
 
-a.btn-black {
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.85rem;
-    line-height: 1;
-    text-decoration: none;
-    background-color: var(--bg-surface);
-    color: var(--text-primary);
-    border: 1px solid var(--border-subtle);
-    margin: 2rem auto 3rem auto;
-    padding: 0.7rem 1.8rem;
-    border-radius: var(--radius-full);
-    font-weight: 400;
-    letter-spacing: 0.03em;
-    transition: all var(--transition-base);
 }
 
-a.btn-black:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-    background-color: var(--accent-subtle);
-    box-shadow: var(--shadow-gold);
-    transform: translateY(-1px);
 }
 
-a.btn-black > * {
-    vertical-align: middle;
 }
 
-a.btn-black span.material-symbols-outlined {
-    font-size: 1rem !important;
-    line-height: 1;
-    color: inherit;
 }
 
 span.material-symbols-outlined {
@@ -955,221 +926,6 @@ body.attachment article[id*="post-"] .entry-content > p {
 }
 
 /* 戻るボタン */
-body.attachment a.btn-black {
-    align-self: center;
-    margin-bottom: 5rem;
-}
-
-/* ─────────────────────────────────────────────
-   レスポンシブ対応
-   ───────────────────────────────────────────── */
-
-@media (max-width: 768px) {
-
-    /* ─── ヘッダー ─── */
-    header.site-header {
-        padding: 1rem 4%;
-    }
-
-    .site-logo {
-        font-size: 1rem;
-    }
-
-    /* ─── #primary ─── */
-    #primary {
-        padding: 1.5rem 4% 4% 4%;
-    }
-
-    /* ─── 検索バー ─── */
-    #primary > #search {
-        margin: 1.5rem auto 2rem auto;
-    }
-
-    #primary > #search form.search-form {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    #primary > #search label {
-        width: 100%;
-    }
-
-    #primary > #search .search-field {
-        width: 100%;
-    }
-
-    #primary > #search .search-submit {
-        width: 100%;
-        padding: 0.8rem;
-    }
-
-    /* ─── フォルダ ─── */
-    #folders label {
-        font-size: 0.75rem;
-        padding: 0.35rem 0.8rem 0.4rem 0.8rem;
-    }
-
-    /* ─── attachment ─── */
-    body.attachment main#main.site-main {
-        padding: 1.5rem 4%;
-    }
-
-    body.attachment article[id*="post-"] {
-        padding: 1.25rem;
-    }
-
-    body.attachment article[id*="post-"] .entry-title {
-        font-size: 1.4rem;
-    }
-
-    body.attachment article[id*="post-"] ul.detail-list li {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.3rem;
-    }
-
-    body.attachment article[id*="post-"] ul.detail-list li strong {
-        margin-bottom: 0;
-    }
-}
-
-/* ─────────────────────────────────────────────
-   アニメーション
-   ───────────────────────────────────────────── */
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(16px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.media-item {
-    animation: fadeInUp 0.5s ease-out both;
-}
-
-.media-item:nth-child(1)  { animation-delay: 0.03s; }
-.media-item:nth-child(2)  { animation-delay: 0.06s; }
-.media-item:nth-child(3)  { animation-delay: 0.09s; }
-.media-item:nth-child(4)  { animation-delay: 0.12s; }
-.media-item:nth-child(5)  { animation-delay: 0.15s; }
-.media-item:nth-child(6)  { animation-delay: 0.18s; }
-.media-item:nth-child(7)  { animation-delay: 0.21s; }
-.media-item:nth-child(8)  { animation-delay: 0.24s; }
-.media-item:nth-child(9)  { animation-delay: 0.27s; }
-.media-item:nth-child(10) { animation-delay: 0.30s; }
-.media-item:nth-child(11) { animation-delay: 0.33s; }
-.media-item:nth-child(12) { animation-delay: 0.36s; }
-
-
-/* ─────────────────────────────────────────────
-   ライトテーマ固有の補正
-   data-theme="light" 時のみ適用
-   ───────────────────────────────────────────── */
-
-[data-theme="light"] #primary > #search input[type="search"]::-webkit-search-cancel-button {
-    filter: none;
-}
-
-[data-theme="light"] .media-item a.downloadlink {
-    background-color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme="light"] .media-item a.downloadlink span.material-symbols-outlined {
-    color: var(--text-primary);
-}
-
-[data-theme="light"] .media-item a.downloadlink:hover {
-    background-color: var(--accent);
-}
-
-[data-theme="light"] .media-item a.downloadlink:hover span.material-symbols-outlined {
-    color: var(--text-inverse);
-}
-
-[data-theme="light"] .media-item {
-    box-shadow: var(--shadow-sm);
-}
-
-[data-theme="light"] .media-item:hover {
-    box-shadow: var(--shadow-lg);
-}
-
-[data-theme="light"] span.material-symbols-outlined {
-    color: var(--text-primary);
-}
-
-/* ライトテーマ: attachment 詳細ページのタグ */
-[data-theme="light"] body.attachment article[id*="post-"] ul.detail-list li ul.detail-tag li {
-    background-color: var(--accent-subtle);
-    color: var(--accent);
-    border-color: rgba(184, 149, 63, 0.25);
-}
-
-/* ライトテーマ: ダウンロードボタン */
-[data-theme="light"] body.attachment article[id*="post-"] .entry-content > p:first-of-type a {
-    background-color: var(--accent);
-    color: var(--text-inverse);
-}
-
-/* ライトテーマ: ページネーション current */
-[data-theme="light"] span.page-numbers.current {
-    color: var(--text-inverse);
-}
-
-/* ─────────────────────────────────────────────
-   ドラッグ＆ドロップアップロードページ
-   ───────────────────────────────────────────── */
-.upload-page-container {
-    max-width: 1000px !important;
-    margin: 3rem auto !important;
-    padding: 0 1rem !important;
-    box-sizing: border-box;
-    text-align: center;
-}
-
-.upload-title {
-    font-size: 1.8rem;
-    font-weight: 300;
-    letter-spacing: 0.05em;
-    color: var(--text-primary);
-    margin-bottom: 0.5rem;
-}
-
-.upload-desc {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-    margin-bottom: 2rem;
-}
-
-.upload-controls {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 1.5rem;
-}
-
-.folder-select-wrapper {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.folder-select-wrapper label {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-}
-
-.drop-zone {
-    background-color: var(--bg-surface);
-    border: 2px dashed var(--border-subtle);
-    border-radius: var(--radius-lg);
-    padding: 3.5rem 2rem;
-    transition: all var(--transition-base);
     cursor: pointer;
     position: relative;
 }
@@ -1911,4 +1667,13 @@ body.single article[id*="post-"] .entry-content > a:hover {
         width: 100%;
         justify-content: center;
     }
+}
+/* 登録ページ系の共通コンテナ幅制限 */
+#primary.upload-page-container {
+    max-width: 1000px;
+    margin: 3rem auto;
+}
+
+#primary.upload-page-container {
+    padding: 0 1rem !important;
 }

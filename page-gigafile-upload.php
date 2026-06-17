@@ -83,7 +83,7 @@ if (isset($_GET['dl'])) {
                             <label for="download_password" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('パスワード', 'fourier'); ?></label>
                             <input type="password" name="download_password" id="download_password" class="upload-form-input" required autofocus autocomplete="new-password" />
                         </div>
-                        <button type="submit" class="btn-black" style="width: 100%; padding: 0.85rem; font-size: 0.9rem; font-weight: 500; justify-content: center; margin-top: 0.5rem;">
+                        <button type="submit" class="btn-base btn-primary" style="width: 100%; padding: 0.85rem; font-size: 0.9rem; font-weight: 500; justify-content: center; margin-top: 0.5rem;">
                             <?php echo esc_html__('認証して進む', 'fourier'); ?>
                         </button>
                     </form>
@@ -93,7 +93,7 @@ if (isset($_GET['dl'])) {
                     <p style="font-size: 0.85rem; color: var(--text-tertiary); margin-bottom: 2rem;">
                         <?php echo esc_html__('ファイルサイズ:', 'fourier'); ?> <?php echo size_format(filesize($filepath)); ?>
                     </p>
-                    <a href="<?php echo esc_url(add_query_arg('action', 'download')); ?>" class="btn-black" style="display: inline-flex; width: 100%; padding: 1rem; font-size: 1rem; font-weight: 600; justify-content: center; background-color: var(--accent); color: var(--text-inverse); border-color: var(--accent); box-shadow: var(--shadow-gold);">
+                    <a href="<?php echo esc_url(add_query_arg('action', 'download')); ?>" class="btn-base btn-primary" style="display: inline-flex; width: 100%; padding: 1rem; font-size: 1rem; font-weight: 600; justify-content: center; background-color: var(--accent); color: var(--text-inverse); border-color: var(--accent); box-shadow: var(--shadow-gold);">
                         <?php echo esc_html__('ファイルをダウンロードする', 'fourier'); ?>
                     </a>
                 <?php endif; ?>
@@ -154,7 +154,7 @@ get_header();
                             <label for="password"><?php echo esc_html__('パスワード', 'fourier'); ?></label>
                             <input type="password" name="password" id="password" class="upload-form-input" required autocomplete="current-password" />
                         </div>
-                        <button type="submit" name="upload_login_submit" class="btn-black upload-login-btn">
+                        <button type="submit" name="upload_login_submit" class="btn-base btn-primary upload-login-btn">
                             <?php echo esc_html__('ログイン', 'fourier'); ?>
                         </button>
                     </form>
@@ -200,7 +200,7 @@ get_header();
                     <span class="material-symbols-outlined upload-icon">cloud_upload</span>
                     <p class="drop-zone-text"><?php echo esc_html__('ここにファイルをドラッグ＆ドロップ', 'fourier'); ?></p>
                     <span class="drop-zone-or"><?php echo esc_html__('または', 'fourier'); ?></span>
-                    <button type="button" id="browse-btn" class="btn-black"><?php echo esc_html__('ファイルを選択', 'fourier'); ?></button>
+                    <button type="button" id="browse-btn" class="btn-base btn-primary"><?php echo esc_html__('ファイルを選択', 'fourier'); ?></button>
                     <input type="file" id="file-input" multiple accept="image/*,video/*,application/pdf,audio/*" style="display: none;" />
                 </div>
             </div>
@@ -224,19 +224,19 @@ get_header();
                         <label for="zip-password-input"><?php echo esc_html__('ダウンロードパスワード:', 'fourier'); ?></label>
                         <input type="text" id="zip-password-input" class="upload-form-input" placeholder="<?php echo esc_attr__('パスワード', 'fourier'); ?>" />
                     </div>
-                    <button type="button" id="zip-submit-btn" class="btn-black btn-zip"><?php echo esc_html__('まとめる', 'fourier'); ?></button>
+                    <button type="button" id="zip-submit-btn" class="btn-base btn-primary btn-zip"><?php echo esc_html__('まとめる', 'fourier'); ?></button>
                 </div>
                 <div id="zip-result" class="zip-result" style="display: none;">
                     <p><?php echo esc_html__('まとめZIPのダウンロードURL:', 'fourier'); ?></p>
                     <div class="zip-url-wrapper">
                         <input type="text" id="zip-url-input" class="upload-form-input" readonly />
-                        <button type="button" id="copy-zip-url-btn" class="btn-black"><?php echo esc_html__('コピー', 'fourier'); ?></button>
+                        <button type="button" id="copy-zip-url-btn" class="btn-base btn-primary"><?php echo esc_html__('コピー', 'fourier'); ?></button>
                     </div>
                 </div>
             </div>
 
             <div class="back-home">
-                <a href="<?php echo esc_url(home_url('/')); ?>" class="btn-black">
+                <a href="<?php echo esc_url(home_url('/')); ?>" class="btn-base btn-primary">
                     <span class="material-symbols-outlined">arrow_back</span>
                     <?php echo esc_html__('フロントページに戻る', 'fourier'); ?>
                 </a>
@@ -426,7 +426,7 @@ get_header();
                             var urlGroup = document.createElement('div');
                             urlGroup.className = 'url-copy-group';
                             urlGroup.innerHTML = '<input type="text" class="upload-form-input url-input" value="' + dlUrl + '" readonly />' +
-                                                 '<button type="button" class="btn-black copy-url-btn">コピー</button>';
+                                                 '<button type="button" class="btn-base btn-primary copy-url-btn">コピー</button>';
                             
                             previewItem.appendChild(urlGroup);
 
