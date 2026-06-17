@@ -925,9 +925,17 @@ body.attachment article[id*="post-"] .entry-content > p {
     color: var(--text-secondary);
 }
 
-/* 戻るボタン */
+/* ドラッグ&ドロップ領域 */
+.drop-zone {
+    border: 2px dashed var(--border-subtle, #ccc);
+    border-radius: var(--radius-lg, 8px);
+    padding: 3rem 1rem;
+    text-align: center;
+    background: var(--bg-body, #fafafa);
+    transition: all 0.3s ease;
     cursor: pointer;
     position: relative;
+    margin-bottom: 1.5rem;
 }
 
 .drop-zone.dragover {
@@ -952,6 +960,12 @@ body.attachment article[id*="post-"] .entry-content > p {
     font-size: 1.1rem;
     font-weight: 400;
     color: var(--text-primary);
+    margin: 0;
+}
+
+.drop-zone-subtext {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
     margin: 0;
 }
 

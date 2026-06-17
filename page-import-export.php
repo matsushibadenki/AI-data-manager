@@ -81,29 +81,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
     padding-bottom: 0.8rem;
 }
 
-/* ドラッグ&ドロップ領域 */
-.drop-zone {
-    border: 2px dashed var(--border-subtle, #ccc);
-    border-radius: var(--radius-lg, 8px);
-    padding: 3rem 1rem;
-    text-align: center;
-    background: var(--bg-body, #fafafa);
-    transition: all 0.3s ease;
-    cursor: pointer;
-    margin-bottom: 1.5rem;
-}
-.drop-zone.dragover {
-    border-color: var(--accent, #C9A96E);
-    background: var(--accent-subtle, #fcfaf5);
-}
-.drop-zone .material-symbols-outlined {
-    font-size: 3rem;
-    color: var(--text-secondary, #999);
-    margin-bottom: 1rem;
-}
-.drop-zone input[type="file"] {
-    display: none;
-}
+
 
 /* プレビューテーブル */
 .preview-table-wrapper {
@@ -263,15 +241,16 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 </h3>
 
                 <div class="drop-zone" id="drop-zone">
-                    <span class="material-symbols-outlined">cloud_upload</span>
-                    <p style="margin:0; font-weight:600; font-size:1.1rem;"><?php echo esc_html__('ここにファイルをドラッグ＆ドロップ', 'fourier'); ?></p>
-                    <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0.5rem;">
-                        <?php echo esc_html__('対応フォーマット: JSONL, JSON, CSV', 'fourier'); ?>
-                    </p>
-                    <button class="btn-base btn-primary" style="margin-top: 1rem;" onclick="document.getElementById('file-input').click()">
-                        <?php echo esc_html__('ファイルを選択', 'fourier'); ?>
-                    </button>
-                    <input type="file" id="file-input" accept=".jsonl,.json,.csv" />
+                    <div class="drop-zone-content">
+                        <span class="material-symbols-outlined upload-icon">cloud_upload</span>
+                        <p class="drop-zone-text"><?php echo esc_html__('ここにファイルをドラッグ＆ドロップ', 'fourier'); ?></p>
+                        <p class="drop-zone-subtext"><?php echo esc_html__('対応フォーマット: JSONL, JSON, CSV', 'fourier'); ?></p>
+                        <span class="drop-zone-or"><?php echo esc_html__('または', 'fourier'); ?></span>
+                        <button type="button" class="btn-base btn-primary" onclick="document.getElementById('file-input').click()">
+                            <?php echo esc_html__('ファイルを選択', 'fourier'); ?>
+                        </button>
+                        <input type="file" id="file-input" accept=".jsonl,.json,.csv" style="display: none;" />
+                    </div>
                 </div>
 
                 <!-- テンプレートダウンロード -->
@@ -467,8 +446,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 alert('対応していないファイル形式です。JSONL, JSON, CSVのいずれかを選択してください。');
                 return;
             }
-
-            dropZone.innerHTML = '<span class="material-symbols-outlined" style="font-size:3rem; color:var(--accent);">hourglass_empty</span><p>プレビューを生成中...</p>';
+            dropZone.innerHTML = '<div class="drop-zone-content"><span class="material-symbols-outlined upload-icon" style="font-size:3rem; color:var(--accent);">hourglass_empty</span><p class="drop-zone-text">プレビューを生成中...</p></div>';
 
             const fd = new FormData();
             fd.append('action', 'frontend_learning_data_import_preview');
@@ -482,7 +460,12 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             .then(r => r.json())
             .then(res => {
                 // reset dropzone
-                dropZone.innerHTML = '<span class="material-symbols-outlined">cloud_upload</span><p style="margin:0; font-weight:600; font-size:1.1rem;">ここにファイルをドラッグ＆ドロップ</p><p style="color:var(--text-secondary); font-size:0.85rem; margin-top:0.5rem;">対応フォーマット: JSONL, JSON, CSV</p><button class="btn-base btn-primary" style="margin-top: 1rem;" onclick="document.getElementById(\'file-input\').click()">ファイルを選択</button>';
+                dropZone.innerHTML = '<div class="drop-zone-content"><span class="material-symbols-outlined upload-icon">cloud_upload</span><p class="drop-zone-text">ここにファイルをドラッグ＆ドロップ</p><p class="drop-zone-subtext">対応フォーマット: JSONL, JSON, CSV</p><span class="drop-zone-or">または</span><button type="button" class="btn-base btn-primary" onclick="document.getElementById(\'file-input\').click()">ファイルを選択</button><input type="file" id="file-input" accept=".jsonl,.json,.csv" style="display: none;" /></div>';
+                
+                // Re-attach listener to the new file-input element
+                document.getElementById('file-input').addEventListener('change', function() {
+                    if (this.files.length) handleFile(this.files[0]);
+                });
                 
                 if (!res.success) {
                     alert(res.data.message || 'エラーが発生しました');
