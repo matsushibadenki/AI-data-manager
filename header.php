@@ -53,6 +53,7 @@
         ['url' => home_url('/text-based-learning/'), 'label' => '個別登録'],
         ['url' => home_url('/media-upload/'), 'label' => '画像登録'],
         ['url' => home_url('/ai-registration/'), 'label' => 'AI登録'],
+        ['url' => home_url('/bot-registration/'), 'label' => 'Bot登録'],
         ['type' => 'separator'],
         ['url' => home_url('/api-settings/'), 'label' => 'API設定'],
     ];

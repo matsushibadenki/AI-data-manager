@@ -919,3 +919,127 @@ function test_llm_connection_handler()
         wp_send_json_error(['message' => '接続失敗: ' . $e->getMessage()]);
     }
 }
+
+add_action('wp_ajax_frontend_learning_data_bot_crawl', 'frontend_learning_data_bot_crawl_handler');
+add_action('wp_ajax_nopriv_frontend_learning_data_bot_crawl', 'frontend_learning_data_bot_crawl_handler');
+
+function frontend_learning_data_bot_crawl_handler() {
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'learning_data_action')) {
+        wp_send_json_error(['message' => esc_html__('セッションが無効です。', 'fourier')]);
+    }
+
+    $url = isset($_POST['url']) ? esc_url_raw($_POST['url']) : '';
+    $target_format = isset($_POST['format']) ? sanitize_text_field($_POST['format']) : 'instruction';
+    $provider = isset($_POST['provider']) ? sanitize_text_field($_POST['provider']) : 'openai';
+    $extra_prompt = isset($_POST['extra_prompt']) ? sanitize_textarea_field($_POST['extra_prompt']) : '';
+
+    if (!$url) {
+        wp_send_json_error(['message' => esc_html__('URLは必須です。', 'fourier')]);
+    }
+
+    // URLからページを取得
+    $response = wp_remote_get($url, ['timeout' => 30]);
+    if (is_wp_error($response)) {
+        wp_send_json_error(['message' => esc_html__('URLの取得に失敗しました: ', 'fourier') . $response->get_error_message()]);
+    }
+    $status_code = wp_remote_retrieve_response_code($response);
+    if ($status_code !== 200) {
+        wp_send_json_error(['message' => esc_html__('URLの取得に失敗しました (Status: ', 'fourier') . $status_code . ')']);
+    }
+    
+    $html = wp_remote_retrieve_body($response);
+    
+    // タイトルの抽出
+    $title = $url;
+    if (preg_match('/<title>(.*?)<\/title>/is', $html, $matches)) {
+        $title = trim(strip_tags($matches[1]));
+    }
+
+    $html = preg_replace('/<script\b[^>]*>(.*?)<\/script>/is', '', $html);
+    $html = preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $html);
+    $text = wp_strip_all_tags($html);
+
+    // トークン数制限
+    $text = preg_replace('/\s+/', ' ', $text);
+    $text = mb_substr(trim($text), 0, 15000);
+
+    if (empty($text)) {
+        wp_send_json_error(['message' => esc_html__('テキストを抽出できませんでした。', 'fourier')]);
+    }
+
+    // プロンプト構築
+    $system_prompt = "あなたはAI学習データを作成する優秀なデータエンジニアです。情報の正確性、一貫性、多様性を確保し、ハルシネーション（嘘）を含まない最高品質の学習データを作成してください。\n";
+    $system_prompt .= "【重要要件】\n";
+    $system_prompt .= "1. 出力は必ずJSON形式のみとしてください。\n";
+    $system_prompt .= "2. 最終的な結果を生成する前に、必ず内部的な推論・自己評価を `\"draft_thought\"` というキーに出力し、その後に実際のデータを `\"data\"` に配置してください。\n";
+
+    $user_prompt = "【指定フォーマット】: {$target_format}\n";
+    if ($extra_prompt) {
+        $user_prompt .= "【追加の指示】: {$extra_prompt}\n";
+    }
+    $user_prompt .= "\n【抽出元データ（Web）】:\n{$text}\n\n";
+    $user_prompt .= "この抽出元データから、フォーマットに従ったJSONを出力してください。構造は { \"draft_thought\": \"...\", \"data\": <指定フォーマットに基づくデータ> } としてください。";
+
+    // LLM API 呼び出し
+    $current_user_id = get_current_user_id();
+    $llm_response_text = "";
+    try {
+        switch ($provider) {
+            case 'openai':
+                $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
+                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-4o-mini';
+                if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
+                $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
+                break;
+            case 'gemini':
+                $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
+                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-1.5-flash';
+                if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
+                $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
+                break;
+            default:
+                throw new Exception("不明なプロバイダです。");
+        }
+    } catch (Exception $e) {
+        wp_send_json_error(['message' => $e->getMessage()]);
+    }
+
+    if (empty($llm_response_text)) {
+        wp_send_json_error(['message' => 'LLMから有効な応答が返されませんでした。']);
+    }
+
+    // データ保存
+    $parsed_json = $llm_response_text;
+    $final_data = $parsed_json;
+    if (is_array($parsed_json) && isset($parsed_json['draft_thought']) && isset($parsed_json['data'])) {
+        $final_data = $parsed_json['data'];
+    } elseif (is_array($parsed_json) && !isset($parsed_json['draft_thought']) && isset($parsed_json['data'])) {
+        $final_data = $parsed_json['data'];
+    } elseif (is_array($parsed_json)) {
+        $final_data = $parsed_json;
+    }
+
+    $payload = [
+        'format' => $target_format,
+        'data' => $final_data
+    ];
+
+    $post_data = array(
+        'post_title'   => "[Bot] " . $title,
+        'post_content' => wp_slash(json_encode($payload, JSON_UNESCAPED_UNICODE)),
+        'post_status'  => 'publish',
+        'post_type'    => 'post',
+        'post_author'  => $current_user_id
+    );
+
+    $post_id = wp_insert_post($post_data);
+    if (is_wp_error($post_id)) {
+        wp_send_json_error(['message' => esc_html__('データの保存に失敗しました。', 'fourier')]);
+    }
+
+    update_post_meta($post_id, 'is_learning_data', '1');
+    update_post_meta($post_id, 'learning_data_source', $url);
+    update_post_meta($post_id, 'learning_data_category', 'bot_crawled');
+
+    wp_send_json_success(['post_id' => $post_id, 'title' => $title]);
+}
