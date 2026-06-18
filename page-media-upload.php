@@ -87,7 +87,7 @@ get_header();
             <p class="upload-desc"><?php echo esc_html__('ファイルをドラッグ＆ドロップするか、「ファイルを選択」ボタンをクリックしてアップロードしてください。', 'fourier'); ?></p>
 
             <div class="upload-controls" style="flex-direction: column; align-items: center; gap: 1.5rem; margin-bottom: 2rem;">
-                <div class="folder-select-wrapper">
+                <div class="folder-select-wrapper" style="margin: 1rem 0;">
                     <label for="upload-folder-select"><?php echo esc_html__('追加先フォルダー:', 'fourier'); ?></label>
                     <select id="upload-folder-select" class="grid-select">
                         <option value="0"><?php echo esc_html__('未分類 (フォルダーなし)', 'fourier'); ?></option>

@@ -195,6 +195,7 @@ get_header();
 
             <div class="learning-tabs">
                 <button class="learning-tab active" data-target="tab-bot-crawl"><?php echo esc_html__('URLクロール実行', 'fourier'); ?></button>
+                <button class="learning-tab" data-target="tab-bot-archive"><?php echo esc_html__('アーカイブ自動収集・クロール', 'fourier'); ?></button>
             </div>
 
             <!-- クロール実行タブ -->
@@ -241,22 +242,56 @@ get_header();
                         </button>
                     </div>
 
-                    <div id="status-message" class="status-msg"></div>
+                </div>
+            </div>
 
-                    <!-- プログレスバー・ログ表示 -->
-                    <div id="progress-area" class="progress-container">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">
-                            <span>進行状況</span>
-                            <span id="progress-text">0 / 0</span>
-                        </div>
-                        <div class="progress-bar-bg">
-                            <div id="progress-bar-fill" class="progress-bar-fill"></div>
-                        </div>
-                        
-                        <div id="log-area" class="log-container"></div>
+            <!-- アーカイブ自動収集・クロールタブ -->
+            <div id="tab-bot-archive" class="learning-tab-content">
+                <div class="upload-controls" style="flex-direction: column; align-items: stretch; margin-bottom: 2rem;">
+                    
+                    <div class="upload-form-group" style="margin-bottom: 1.5rem;">
+                        <label for="archive-pattern" style="font-weight: 600; margin-bottom: 0.5rem; display: block;">
+                            <?php echo esc_html__('対象URLパターン (例: *.example.com/*)', 'fourier'); ?>
+                        </label>
+                        <input type="text" id="archive-pattern" class="upload-form-input" placeholder="*.example.com/*" />
                     </div>
 
+                    <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                        <div class="upload-form-group" style="flex: 1; min-width: 200px;">
+                            <label for="archive-source" style="font-weight: 600; margin-bottom: 0.5rem; display: block;"><?php echo esc_html__('データソース', 'fourier'); ?></label>
+                            <select id="archive-source" class="upload-form-input">
+                                <option value="internet_archive">Internet Archive (Wayback Machine)</option>
+                                <option value="common_crawl">Common Crawl</option>
+                            </select>
+                        </div>
+                        
+                        <div class="upload-form-group" style="flex: 1; min-width: 200px;">
+                            <label for="archive-limit" style="font-weight: 600; margin-bottom: 0.5rem; display: block;"><?php echo esc_html__('取得上限数', 'fourier'); ?></label>
+                            <input type="number" id="archive-limit" class="upload-form-input" value="10" min="1" max="500" />
+                        </div>
+                    </div>
+
+                    <div style="text-align: right;">
+                        <button type="button" id="btn-start-archive" class="btn-base btn-primary">
+                            <?php echo esc_html__('自動収集＆クロール開始', 'fourier'); ?>
+                        </button>
+                    </div>
                 </div>
+            </div>
+
+            <div id="status-message" class="status-msg"></div>
+
+            <!-- プログレスバー・ログ表示 -->
+            <div id="progress-area" class="progress-container">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem;">
+                    <span>進行状況</span>
+                    <span id="progress-text">0 / 0</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div id="progress-bar-fill" class="progress-bar-fill"></div>
+                </div>
+                
+                <div id="log-area" class="log-container"></div>
             </div>
 
             <div class="logout-wrapper">
@@ -281,8 +316,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressBar = document.getElementById('progress-bar-fill');
     const progressText = document.getElementById('progress-text');
     const logArea = document.getElementById('log-area');
+    
+    const btnStartArchive = document.getElementById('btn-start-archive');
+    const archivePattern = document.getElementById('archive-pattern');
+    const archiveSource = document.getElementById('archive-source');
+    const archiveLimit = document.getElementById('archive-limit');
+
     const ajaxUrl = '<?php echo esc_url(admin_url('admin-ajax.php')); ?>';
     const nonce = '<?php echo wp_create_nonce('learning_data_action'); ?>';
+
+    // Tab switching
+    const tabs = document.querySelectorAll('.learning-tab');
+    const tabContents = document.querySelectorAll('.learning-tab-content');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById(tab.dataset.target).classList.add('active');
+        });
+    });
 
     function addLog(msg, type = 'info') {
         const div = document.createElement('div');
@@ -293,19 +346,23 @@ document.addEventListener('DOMContentLoaded', () => {
         logArea.scrollTop = logArea.scrollHeight;
     }
 
-    btnStart.addEventListener('click', async () => {
-        const rawUrls = urlsInput.value.split('\\n').map(u => u.trim()).filter(u => u !== '');
+    async function performCrawlFlow(rawUrls) {
         if (rawUrls.length === 0) {
             statusMsg.textContent = 'URLを1つ以上入力してください。';
             statusMsg.className = 'status-msg error';
+            statusMsg.style.display = 'block';
             return;
         }
 
         btnStart.disabled = true;
+        if(btnStartArchive) btnStartArchive.disabled = true;
         urlsInput.disabled = true;
         formatInput.disabled = true;
         providerInput.disabled = true;
         promptInput.disabled = true;
+        if(archivePattern) archivePattern.disabled = true;
+        if(archiveSource) archiveSource.disabled = true;
+        if(archiveLimit) archiveLimit.disabled = true;
         
         statusMsg.style.display = 'none';
         progressArea.style.display = 'block';
@@ -358,14 +415,66 @@ document.addEventListener('DOMContentLoaded', () => {
         addLog(`全処理が完了しました。(成功: ${successCount}, エラー: ${errorCount})`, 'info');
 
         btnStart.disabled = false;
+        if(btnStartArchive) btnStartArchive.disabled = false;
         urlsInput.disabled = false;
         formatInput.disabled = false;
         providerInput.disabled = false;
         promptInput.disabled = false;
+        if(archivePattern) archivePattern.disabled = false;
+        if(archiveSource) archiveSource.disabled = false;
+        if(archiveLimit) archiveLimit.disabled = false;
 
         statusMsg.textContent = `クロール完了 (成功: ${successCount}, エラー: ${errorCount})`;
         statusMsg.className = successCount > 0 ? 'status-msg success' : 'status-msg error';
+        statusMsg.style.display = 'block';
+    }
+
+    btnStart.addEventListener('click', () => {
+        const rawUrls = urlsInput.value.split('\n').map(u => u.trim()).filter(u => u !== '');
+        performCrawlFlow(rawUrls);
     });
+
+    if (btnStartArchive) {
+        btnStartArchive.addEventListener('click', async () => {
+            const pattern = archivePattern.value.trim();
+            if (!pattern) {
+                statusMsg.textContent = '対象URLパターンを入力してください。';
+                statusMsg.className = 'status-msg error';
+                statusMsg.style.display = 'block';
+                return;
+            }
+
+            btnStartArchive.disabled = true;
+            statusMsg.style.display = 'none';
+            progressArea.style.display = 'block';
+            logArea.innerHTML = '';
+            addLog(`[自動収集] ${archiveSource.options[archiveSource.selectedIndex].text} に問い合わせ中...`, 'info');
+
+            const fd = new FormData();
+            fd.append('action', 'frontend_learning_data_bot_auto_collect_urls');
+            fd.append('nonce', nonce);
+            fd.append('pattern', pattern);
+            fd.append('source', archiveSource.value);
+            fd.append('limit', archiveLimit.value);
+
+            try {
+                const res = await fetch(ajaxUrl, { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.success && data.data.urls) {
+                    addLog(`[自動収集] ${data.data.urls.length}件のURLが見つかりました。クロールに移行します。`, 'success');
+                    urlsInput.value = data.data.urls.join('\n'); // textareaに反映
+                    btnStartArchive.disabled = false;
+                    performCrawlFlow(data.data.urls);
+                } else {
+                    addLog(`[自動収集エラー] ${data.data.message || 'URLが見つかりませんでした。'}`, 'error');
+                    btnStartArchive.disabled = false;
+                }
+            } catch (err) {
+                addLog(`[自動収集 通信エラー] APIへの接続に失敗しました。`, 'error');
+                btnStartArchive.disabled = false;
+            }
+        });
+    }
 });
 </script>
 

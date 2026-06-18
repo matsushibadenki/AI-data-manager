@@ -1043,3 +1043,92 @@ function frontend_learning_data_bot_crawl_handler() {
 
     wp_send_json_success(['post_id' => $post_id, 'title' => $title]);
 }
+
+add_action('wp_ajax_frontend_learning_data_bot_auto_collect_urls', 'frontend_learning_data_bot_auto_collect_urls_handler');
+add_action('wp_ajax_nopriv_frontend_learning_data_bot_auto_collect_urls', 'frontend_learning_data_bot_auto_collect_urls_handler');
+
+function frontend_learning_data_bot_auto_collect_urls_handler() {
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'learning_data_action')) {
+        wp_send_json_error(['message' => esc_html__('セッションが無効です。', 'fourier')]);
+    }
+
+    $pattern = isset($_POST['pattern']) ? sanitize_text_field($_POST['pattern']) : '';
+    $source = isset($_POST['source']) ? sanitize_text_field($_POST['source']) : '';
+    $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 10;
+
+    if (empty($pattern) || empty($source)) {
+        wp_send_json_error(['message' => esc_html__('対象URLパターンとデータソースを指定してください。', 'fourier')]);
+    }
+
+    if ($limit < 1 || $limit > 500) {
+        $limit = 10;
+    }
+
+    $urls = [];
+
+    try {
+        if ($source === 'internet_archive') {
+            $api_url = "https://web.archive.org/cdx/search/cdx?url=" . urlencode($pattern) . "&output=json&fl=original&filter=statuscode:200&limit=" . $limit;
+            $response = wp_remote_get($api_url, ['timeout' => 30]);
+            if (is_wp_error($response)) {
+                throw new Exception("Internet Archive API通信エラー: " . $response->get_error_message());
+            }
+            $body = wp_remote_retrieve_body($response);
+            $data = json_decode($body, true);
+            if (is_array($data) && count($data) > 1) { // 最初の行はヘッダー(original等)
+                array_shift($data); // ヘッダーを削除
+                foreach ($data as $row) {
+                    if (isset($row[0])) {
+                        $urls[] = $row[0];
+                    }
+                }
+            }
+        } elseif ($source === 'common_crawl') {
+            // collinfoから最新のインデックスを取得
+            $collinfo_url = "https://index.commoncrawl.org/collinfo.json";
+            $response = wp_remote_get($collinfo_url, ['timeout' => 15]);
+            if (is_wp_error($response)) {
+                throw new Exception("Common Crawl API通信エラー: " . $response->get_error_message());
+            }
+            $collinfo = json_decode(wp_remote_retrieve_body($response), true);
+            if (!is_array($collinfo) || empty($collinfo)) {
+                throw new Exception("Common Crawlのインデックス情報が取得できませんでした。");
+            }
+            $latest_index = $collinfo[0]['id'];
+
+            // API叩く
+            $api_url = "https://index.commoncrawl.org/" . $latest_index . "-index?url=" . urlencode($pattern) . "&output=json";
+            $response = wp_remote_get($api_url, ['timeout' => 45]);
+            if (is_wp_error($response)) {
+                throw new Exception("Common Crawl API通信エラー: " . $response->get_error_message());
+            }
+            $body = wp_remote_retrieve_body($response);
+            
+            // Common CrawlはJSONLを返す
+            $lines = explode("\n", trim($body));
+            $count = 0;
+            foreach ($lines as $line) {
+                if (empty($line)) continue;
+                $row = json_decode($line, true);
+                if (isset($row['url']) && isset($row['status']) && $row['status'] == '200') {
+                    $urls[] = $row['url'];
+                    $count++;
+                    if ($count >= $limit) break;
+                }
+            }
+        } else {
+            throw new Exception("不正なデータソースです。");
+        }
+    } catch (Exception $e) {
+        wp_send_json_error(['message' => $e->getMessage()]);
+    }
+
+    // クエリパラメータ等の重複をなるべく排除
+    $urls = array_values(array_unique($urls));
+
+    if (empty($urls)) {
+        wp_send_json_error(['message' => esc_html__('URLが見つかりませんでした。パターンを変更してお試しください。', 'fourier')]);
+    }
+
+    wp_send_json_success(['urls' => $urls]);
+}
