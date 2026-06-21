@@ -136,6 +136,10 @@ get_header();
                         <button type="button" class="learning-tab" data-target="tab-chatml">ChatML</button>
                         <button type="button" class="learning-tab" data-target="tab-bbox">Bounding Box</button>
                         <button type="button" class="learning-tab" data-target="tab-dpo">DPO / RLHF</button>
+                        <button type="button" class="learning-tab" data-target="tab-transcription">Transcription</button>
+                        <button type="button" class="learning-tab" data-target="tab-video-caption">Video Caption</button>
+                        <button type="button" class="learning-tab" data-target="tab-document-qa">Document QA</button>
+                        <button type="button" class="learning-tab" data-target="tab-code-instruction">Code Instruction</button>
                     </div>
 
                     <div id="tab-none" class="learning-tab-content active" data-format="none">
@@ -195,6 +199,50 @@ get_header();
                         <div class="upload-form-group" style="margin-bottom:0; text-align: left;">
                             <label for="dpo-rejected" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Rejected (悪い回答):', 'fourier'); ?></label>
                             <textarea id="dpo-rejected" class="upload-form-input" rows="3" placeholder="避けさせたい悪い回答"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="tab-transcription" class="learning-tab-content" data-format="transcription">
+                        <div class="upload-form-group" style="text-align: left;">
+                            <label for="transcription-text" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Transcription (書き起こし):', 'fourier'); ?></label>
+                            <textarea id="transcription-text" class="upload-form-input" rows="4" placeholder="音声の書き起こしテキストを入力"></textarea>
+                        </div>
+                        <div class="upload-form-group" style="margin-bottom:0; text-align: left;">
+                            <label for="transcription-speaker" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Speaker (話者名 - オプション):', 'fourier'); ?></label>
+                            <input type="text" id="transcription-speaker" class="upload-form-input" placeholder="例: Speaker 1">
+                        </div>
+                    </div>
+
+                    <div id="tab-video-caption" class="learning-tab-content" data-format="video-caption">
+                        <div class="upload-form-group" style="text-align: left;">
+                            <label for="video-caption-text" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Video Caption (動画説明):', 'fourier'); ?></label>
+                            <textarea id="video-caption-text" class="upload-form-input" rows="4" placeholder="動画の内容やシーンの説明を入力"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="tab-document-qa" class="learning-tab-content" data-format="document-qa">
+                        <div class="upload-form-group" style="text-align: left;">
+                            <label for="doc-context" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Extracted Text / Context (抽出テキスト):', 'fourier'); ?></label>
+                            <textarea id="doc-context" class="upload-form-input" rows="4" placeholder="文書から抽出されたテキスト"></textarea>
+                        </div>
+                        <div class="upload-form-group" style="text-align: left;">
+                            <label for="doc-question" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Question (質問):', 'fourier'); ?></label>
+                            <textarea id="doc-question" class="upload-form-input" rows="2" placeholder="文書に関する質問"></textarea>
+                        </div>
+                        <div class="upload-form-group" style="margin-bottom:0; text-align: left;">
+                            <label for="doc-answer" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Answer (回答):', 'fourier'); ?></label>
+                            <textarea id="doc-answer" class="upload-form-input" rows="3" placeholder="抽出テキストに基づく回答"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="tab-code-instruction" class="learning-tab-content" data-format="code-instruction">
+                        <div class="upload-form-group" style="text-align: left;">
+                            <label for="code-instruction" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Instruction (コーディング指示):', 'fourier'); ?></label>
+                            <textarea id="code-instruction" class="upload-form-input" rows="2" placeholder="コードの修正や生成に関する指示"></textarea>
+                        </div>
+                        <div class="upload-form-group" style="margin-bottom:0; text-align: left;">
+                            <label for="code-explanation" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);"><?php echo esc_html__('Explanation (コードの解説):', 'fourier'); ?></label>
+                            <textarea id="code-explanation" class="upload-form-input" rows="4" placeholder="添付したコードスニペットの解説や動作説明"></textarea>
                         </div>
                     </div>
                 </div>
@@ -406,8 +454,14 @@ get_header();
                 reader.readAsDataURL(file);
             } else if (file.type.startsWith('video/')) {
                 img.src = 'data:image/svg+xml;charset=UTF-8,%3csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23C9A96E"%3e%3cpath d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/%3e%3c/svg%3e';
+            } else if (file.type.startsWith('audio/')) {
+                img.src = 'data:image/svg+xml;charset=UTF-8,%3csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%234A90E2"%3e%3cpath d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/%3e%3c/svg%3e';
             } else if (file.type === 'application/pdf') {
                 img.src = 'data:image/svg+xml;charset=UTF-8,%3csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23F87171"%3e%3cpath d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5z"/%3e%3c/svg%3e';
+            } else if (file.name.endsWith('.csv') || file.name.endsWith('.json')) {
+                img.src = 'data:image/svg+xml;charset=UTF-8,%3csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2310B981"%3e%3cpath d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14H6v-2h4v2zm0-4H6v-2h4v2zm0-4H6V7h4v2zm7 8h-5v-2h5v2zm0-4h-5v-2h5v2zm0-4h-5V7h5v2z"/%3e%3c/svg%3e';
+            } else {
+                img.src = 'data:image/svg+xml;charset=UTF-8,%3csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%239CA3AF"%3e%3cpath d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/%3e%3c/svg%3e';
             }
 
             var nameSpan = document.createElement('span');
@@ -507,6 +561,26 @@ get_header();
                             prompt: document.getElementById('dpo-prompt').value,
                             chosen: document.getElementById('dpo-chosen').value,
                             rejected: document.getElementById('dpo-rejected').value
+                        };
+                    } else if (currentLearningFormat === 'transcription') {
+                        learningData = {
+                            text: document.getElementById('transcription-text').value,
+                            speaker: document.getElementById('transcription-speaker').value
+                        };
+                    } else if (currentLearningFormat === 'video-caption') {
+                        learningData = {
+                            caption: document.getElementById('video-caption-text').value
+                        };
+                    } else if (currentLearningFormat === 'document-qa') {
+                        learningData = {
+                            context: document.getElementById('doc-context').value,
+                            question: document.getElementById('doc-question').value,
+                            answer: document.getElementById('doc-answer').value
+                        };
+                    } else if (currentLearningFormat === 'code-instruction') {
+                        learningData = {
+                            instruction: document.getElementById('code-instruction').value,
+                            explanation: document.getElementById('code-explanation').value
                         };
                     }
                 } catch (e) {

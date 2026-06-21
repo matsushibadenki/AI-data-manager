@@ -46,12 +46,12 @@
     // グローバル学習データ管理メニュー
     $learning_menu_items = [
         ['url' => home_url('/'), 'label' => 'ダッシュボード'],
-        ['url' => home_url('/index-image/'), 'label' => '画像一覧'],
+        ['url' => home_url('/index-image/'), 'label' => 'メディア一覧'],
         ['url' => home_url('/index-text/'), 'label' => 'シート一覧'],
         ['url' => home_url('/import-export/'), 'label' => 'インポート/エクスポート'],
         ['type' => 'separator'],
         ['url' => home_url('/text-based-learning/'), 'label' => '個別登録'],
-        ['url' => home_url('/media-upload/'), 'label' => '画像登録'],
+        ['url' => home_url('/media-upload/'), 'label' => 'メディア登録'],
         ['url' => home_url('/ai-registration/'), 'label' => 'AI登録'],
         ['url' => home_url('/bot-registration/'), 'label' => 'Bot登録'],
         ['type' => 'separator'],

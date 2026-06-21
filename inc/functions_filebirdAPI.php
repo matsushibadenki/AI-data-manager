@@ -769,6 +769,147 @@ add_action('rest_api_init', function () {
             ),
         ),
     ));
+    /* ──────────────────────────────────────
+     * 3-9. POST /images/upload — 画像のアップロードと学習データ付与（認証必須）
+     * ────────────────────────────────────── */
+    register_rest_route(FBAPI_NAMESPACE, '/images/upload', array(
+        'methods'             => WP_REST_Server::CREATABLE,
+        'callback'            => 'fbapi_upload_image_callback',
+        'permission_callback' => 'fbapi_verify_api_key',
+        'args'                => array(
+            'folder_id' => array(
+                'description'       => 'Optional FileBird folder ID',
+                'type'              => 'integer',
+                'required'          => false,
+                'sanitize_callback' => 'absint',
+            ),
+            'folder_name' => array(
+                'description'       => 'Optional FileBird folder name (created if not exists)',
+                'type'              => 'string',
+                'required'          => false,
+            ),
+            'description' => array(
+                'description'       => 'JSON string containing learning metadata (format, prompt, chosen, etc)',
+                'type'              => 'string',
+                'required'          => false,
+            ),
+        ),
+    ));
+
+    /* ──────────────────────────────────────
+     * 3-10. PUT /images/(?P<id>\d+) — 画像メタデータの更新（認証必須）
+     * ────────────────────────────────────── */
+    register_rest_route(FBAPI_NAMESPACE, '/images/(?P<id>\d+)', array(
+        'methods'             => WP_REST_Server::EDITABLE,
+        'callback'            => 'fbapi_update_image_callback',
+        'permission_callback' => 'fbapi_verify_api_key',
+        'args'                => array(
+            'id' => array(
+                'description'       => 'Attachment ID',
+                'type'              => 'integer',
+                'required'          => true,
+                'sanitize_callback' => 'absint',
+            ),
+            'title' => array(
+                'description'       => 'New image title',
+                'type'              => 'string',
+                'required'          => false,
+            ),
+            'description' => array(
+                'description'       => 'New JSON string for learning metadata',
+                'type'              => 'string',
+                'required'          => false,
+            ),
+        ),
+    ));
+
+    /* ──────────────────────────────────────
+     * 3-11. DELETE /images/(?P<id>\d+) — 画像の削除（認証必須）
+     * ────────────────────────────────────── */
+    register_rest_route(FBAPI_NAMESPACE, '/images/(?P<id>\d+)', array(
+        'methods'             => WP_REST_Server::DELETABLE,
+        'callback'            => 'fbapi_delete_image_callback',
+        'permission_callback' => 'fbapi_verify_api_key',
+        'args'                => array(
+            'id' => array(
+                'description'       => 'Attachment ID',
+                'type'              => 'integer',
+                'required'          => true,
+                'sanitize_callback' => 'absint',
+            ),
+        ),
+    ));
+
+    /* ──────────────────────────────────────
+     * 3-12. POST /media/upload — 汎用メディアのアップロードと学習データ付与（認証必須）
+     * ────────────────────────────────────── */
+    register_rest_route(FBAPI_NAMESPACE, '/media/upload', array(
+        'methods'             => WP_REST_Server::CREATABLE,
+        'callback'            => 'fbapi_upload_image_callback', // handlers are generic
+        'permission_callback' => 'fbapi_verify_api_key',
+        'args'                => array(
+            'folder_id' => array(
+                'description'       => 'Optional FileBird folder ID',
+                'type'              => 'integer',
+                'required'          => false,
+                'sanitize_callback' => 'absint',
+            ),
+            'folder_name' => array(
+                'description'       => 'Optional FileBird folder name (created if not exists)',
+                'type'              => 'string',
+                'required'          => false,
+            ),
+            'description' => array(
+                'description'       => 'JSON string containing learning metadata (format, prompt, chosen, etc)',
+                'type'              => 'string',
+                'required'          => false,
+            ),
+        ),
+    ));
+
+    /* ──────────────────────────────────────
+     * 3-13. PUT /media/(?P<id>\d+) — メディアメタデータの更新（認証必須）
+     * ────────────────────────────────────── */
+    register_rest_route(FBAPI_NAMESPACE, '/media/(?P<id>\d+)', array(
+        'methods'             => WP_REST_Server::EDITABLE,
+        'callback'            => 'fbapi_update_image_callback',
+        'permission_callback' => 'fbapi_verify_api_key',
+        'args'                => array(
+            'id' => array(
+                'description'       => 'Attachment ID',
+                'type'              => 'integer',
+                'required'          => true,
+                'sanitize_callback' => 'absint',
+            ),
+            'title' => array(
+                'description'       => 'New media title',
+                'type'              => 'string',
+                'required'          => false,
+            ),
+            'description' => array(
+                'description'       => 'New JSON string for learning metadata',
+                'type'              => 'string',
+                'required'          => false,
+            ),
+        ),
+    ));
+
+    /* ──────────────────────────────────────
+     * 3-14. DELETE /media/(?P<id>\d+) — メディアの削除（認証必須）
+     * ────────────────────────────────────── */
+    register_rest_route(FBAPI_NAMESPACE, '/media/(?P<id>\d+)', array(
+        'methods'             => WP_REST_Server::DELETABLE,
+        'callback'            => 'fbapi_delete_image_callback',
+        'permission_callback' => 'fbapi_verify_api_key',
+        'args'                => array(
+            'id' => array(
+                'description'       => 'Attachment ID',
+                'type'              => 'integer',
+                'required'          => true,
+                'sanitize_callback' => 'absint',
+            ),
+        ),
+    ));
 });
 
 
@@ -1294,6 +1435,133 @@ function fbapi_batch_callback(WP_REST_Request $request)
         ),
     ), 200);
 }
+
+/**
+ * 3-9. POST /images/upload — 画像のアップロード
+ */
+function fbapi_upload_image_callback(WP_REST_Request $request)
+{
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    require_once(ABSPATH . 'wp-admin/includes/file.php');
+    require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+    $files = $request->get_file_params();
+    if (empty($files) || !isset($files['file'])) {
+        return new WP_Error('no_file', 'No image file uploaded.', array('status' => 400));
+    }
+
+    $attachment_id = media_handle_sideload($files['file'], 0);
+    if (is_wp_error($attachment_id)) {
+        return new WP_Error('upload_failed', $attachment_id->get_error_message(), array('status' => 500));
+    }
+
+    // JSONディスクリプション(学習データ)の登録
+    $description = $request->get_param('description');
+    if (!empty($description)) {
+        // Validation: Ensure it's valid JSON if it's supposed to be learning data
+        $decoded = json_decode($description, true);
+        if ($decoded !== null) {
+            wp_update_post(array(
+                'ID' => $attachment_id,
+                'post_content' => wp_slash($description)
+            ));
+        }
+    }
+
+    // FileBirdフォルダへの紐付け
+    $folder_id = $request->get_param('folder_id');
+    $folder_name = $request->get_param('folder_name');
+    
+    if (empty($folder_id) && !empty($folder_name)) {
+        // Find or create folder by name
+        global $wpdb;
+        $fb_table = $wpdb->prefix . 'fbv';
+        $existing = $wpdb->get_row($wpdb->prepare("SELECT id FROM $fb_table WHERE name = %s LIMIT 1", $folder_name));
+        if ($existing) {
+            $folder_id = $existing->id;
+        } else {
+            $wpdb->insert($fb_table, array('name' => $folder_name, 'parent' => 0, 'type' => 0));
+            $folder_id = $wpdb->insert_id;
+        }
+    }
+
+    if (!empty($folder_id) && class_exists('\FileBird\Model\Folder')) {
+        \FileBird\Model\Folder::setFoldersForPosts($attachment_id, $folder_id);
+    }
+
+    return new WP_REST_Response(array(
+        'success' => true,
+        'message' => 'Image uploaded successfully.',
+        'attachment_id' => $attachment_id,
+        'folder_id' => $folder_id
+    ), 200);
+}
+
+/**
+ * 3-10. PUT /images/(?P<id>\d+) — 画像のメタデータ更新
+ */
+function fbapi_update_image_callback(WP_REST_Request $request)
+{
+    $id = (int) $request->get_param('id');
+    $post = get_post($id);
+
+    if (!$post || $post->post_type !== 'attachment') {
+        return new WP_Error('not_found', 'Attachment not found.', array('status' => 404));
+    }
+
+    $update_args = array('ID' => $id);
+    $title = $request->get_param('title');
+    $description = $request->get_param('description');
+
+    if ($title !== null) {
+        $update_args['post_title'] = sanitize_text_field($title);
+    }
+
+    if ($description !== null) {
+        $decoded = json_decode($description, true);
+        if ($decoded !== null) {
+            $update_args['post_content'] = wp_slash($description);
+        } else {
+            return new WP_Error('invalid_json', 'Description must be valid JSON.', array('status' => 400));
+        }
+    }
+
+    if (count($update_args) > 1) {
+        wp_update_post($update_args);
+    }
+
+    return new WP_REST_Response(array(
+        'success' => true,
+        'message' => 'Image metadata updated successfully.',
+        'attachment_id' => $id
+    ), 200);
+}
+
+/**
+ * 3-11. DELETE /images/(?P<id>\d+) — 画像の削除
+ */
+function fbapi_delete_image_callback(WP_REST_Request $request)
+{
+    $id = (int) $request->get_param('id');
+    $post = get_post($id);
+
+    if (!$post || $post->post_type !== 'attachment') {
+        return new WP_Error('not_found', 'Attachment not found.', array('status' => 404));
+    }
+
+    $result = wp_delete_attachment($id, true);
+
+    if (!$result) {
+        return new WP_Error('delete_failed', 'Failed to delete attachment.', array('status' => 500));
+    }
+
+    return new WP_REST_Response(array(
+        'success' => true,
+        'message' => 'Image deleted successfully.',
+        'attachment_id' => $id
+    ), 200);
+}
+
 
 
 /* ================================================================

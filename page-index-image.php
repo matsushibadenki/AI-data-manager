@@ -301,7 +301,7 @@ $posts_per_page = $cols * $rows;
                             <?php endif; ?>
                         <?php endif; ?>
                     </div>
-                <?php
+        <?php
                 }
                 // 動画の場合
                 elseif (strpos($mime_type, 'video') !== false) {
@@ -309,22 +309,82 @@ $posts_per_page = $cols * $rows;
                 ?>
                     <div class="media-item">
                         <div class="mediaarea">
-                            <!-- 動画詳細ページリンク -->
                             <a href="<?php echo get_attachment_link($media_item->ID); ?>" class="medialink">
-                                <video preload="metadata" style="width: 100%; height: auto; pointer-events: none; display: block;">
+                                <video controls preload="metadata" style="width: 100%; height: auto; display: block;">
                                     <source src="<?php echo esc_url($video_url); ?>" type="<?php echo esc_attr($mime_type); ?>">
                                     <?php echo esc_html__('お使いのブラウザは動画タグに対応していません。', 'fourier'); ?>
                                 </video>
                             </a>
-                            <!-- ダウンロードリンク -->
                             <a href="<?php echo esc_url($download_url); ?>" download="<?php echo esc_attr($file_name); ?>" class="downloadlink"><span class="material-symbols-outlined">download</span></a>
                         </div>
                         <h3><?php echo esc_html($title); ?></h3>
-                        <p><?php echo esc_html__('ファイル名', 'fourier'); ?>: <?php echo esc_html($file_name); ?></p>
+                        <p style="word-break: break-all; font-size: 0.8rem;"><?php echo esc_html__('ファイル名', 'fourier'); ?>: <?php echo esc_html($file_name); ?></p>
+                        <?php if ($json_data && is_array($json_data)) : ?>
+                            <ul class="detail-list" style="margin-top: 10px;">
+                                <?php if (isset($json_data['format'])) : ?>
+                                    <li><span><?php echo esc_html__('学習データ', 'fourier'); ?></span><span style="background:var(--accent-subtle); color:var(--accent); padding:0.1rem 0.5rem; border-radius:var(--radius-full); font-size:0.7rem; border:1px solid rgba(201,169,110,0.3);"><?php echo esc_html($json_data['format']); ?></span></li>
+                                <?php endif; ?>
+                            </ul>
+                        <?php endif; ?>
                     </div>
-        <?php
+                <?php
                 }
-                // 他のメディアタイプの場合、ここに追加のケースを記述できます
+                // 音声の場合
+                elseif (strpos($mime_type, 'audio') !== false) {
+                    $audio_url = wp_get_attachment_url($media_item->ID);
+                ?>
+                    <div class="media-item" style="padding: 1.5rem; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
+                        <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 120px; background: #f0f4f8; border-radius: 8px; margin-bottom: 1rem;">
+                            <span class="material-symbols-outlined" style="font-size: 4rem; color: #4A90E2;">audio_file</span>
+                        </div>
+                        <audio controls style="width: 100%; margin-bottom: 1rem;">
+                            <source src="<?php echo esc_url($audio_url); ?>" type="<?php echo esc_attr($mime_type); ?>">
+                            Your browser does not support the audio element.
+                        </audio>
+                        <h3><?php echo esc_html($title); ?></h3>
+                        <p style="word-break: break-all; font-size: 0.8rem; margin-bottom: 1rem;"><?php echo esc_html($file_name); ?></p>
+                        <a href="<?php echo esc_url($download_url); ?>" download="<?php echo esc_attr($file_name); ?>" class="btn-base btn-secondary" style="display: block; text-align: center;"><span class="material-symbols-outlined" style="vertical-align: middle;">download</span> ダウンロード</a>
+                        
+                        <?php if ($json_data && is_array($json_data)) : ?>
+                            <ul class="detail-list" style="margin-top: 10px;">
+                                <?php if (isset($json_data['format'])) : ?>
+                                    <li><span><?php echo esc_html__('学習データ', 'fourier'); ?></span><span style="background:var(--accent-subtle); color:var(--accent); padding:0.1rem 0.5rem; border-radius:var(--radius-full); font-size:0.7rem; border:1px solid rgba(201,169,110,0.3);"><?php echo esc_html($json_data['format']); ?></span></li>
+                                <?php endif; ?>
+                            </ul>
+                        <?php endif; ?>
+                    </div>
+                <?php
+                }
+                // 文書・その他の場合 (PDF, CSV, JSONなど)
+                else {
+                    $icon_name = 'draft';
+                    $icon_color = '#9CA3AF';
+                    if (strpos($mime_type, 'pdf') !== false) {
+                        $icon_name = 'picture_as_pdf';
+                        $icon_color = '#F87171';
+                    } elseif (strpos($file_name, '.csv') !== false || strpos($file_name, '.json') !== false) {
+                        $icon_name = 'table_view';
+                        $icon_color = '#10B981';
+                    }
+                ?>
+                    <div class="media-item" style="padding: 1.5rem; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
+                        <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 120px; background: #f9fafb; border-radius: 8px; margin-bottom: 1rem;">
+                            <span class="material-symbols-outlined" style="font-size: 4rem; color: <?php echo esc_attr($icon_color); ?>;"><?php echo esc_attr($icon_name); ?></span>
+                        </div>
+                        <h3 style="font-size: 1rem; margin-bottom: 0.5rem;"><?php echo esc_html($title); ?></h3>
+                        <p style="word-break: break-all; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;"><?php echo esc_html($file_name); ?></p>
+                        <a href="<?php echo esc_url($download_url); ?>" download="<?php echo esc_attr($file_name); ?>" class="btn-base btn-primary" style="display: block; text-align: center;"><span class="material-symbols-outlined" style="vertical-align: middle;">download</span> ダウンロード</a>
+                        
+                        <?php if ($json_data && is_array($json_data)) : ?>
+                            <ul class="detail-list" style="margin-top: 15px;">
+                                <?php if (isset($json_data['format'])) : ?>
+                                    <li><span><?php echo esc_html__('学習データ', 'fourier'); ?></span><span style="background:var(--accent-subtle); color:var(--accent); padding:0.1rem 0.5rem; border-radius:var(--radius-full); font-size:0.7rem; border:1px solid rgba(201,169,110,0.3);"><?php echo esc_html($json_data['format']); ?></span></li>
+                                <?php endif; ?>
+                            </ul>
+                        <?php endif; ?>
+                    </div>
+                <?php
+                }
             endwhile;
             wp_reset_postdata(); // ここでリセット
             echo '</div>';

@@ -425,7 +425,23 @@ function fourier_format_learning_data($item, $output_style) {
     }
     
     // raw (default)
-    return array_merge(['title' => $item['title']], is_array($item['data']) ? $item['data'] : ['text' => $item['data']]);
+    $data = is_array($item['data']) ? $item['data'] : ['text' => $item['data']];
+    $is_list = false;
+    if (!empty($data)) {
+        $is_list = true;
+        $i = 0;
+        foreach ($data as $k => $v) {
+            if ($k !== $i++) {
+                $is_list = false;
+                break;
+            }
+        }
+    }
+    
+    if ($is_list) {
+        return ['title' => $item['title'], 'data' => $data];
+    }
+    return array_merge(['title' => $item['title']], $data);
 }
 
 add_action('wp_ajax_frontend_learning_data_export', 'frontend_learning_data_export_handler');
