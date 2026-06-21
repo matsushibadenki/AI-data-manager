@@ -345,6 +345,138 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 </div>
             </section>
 
+            <!-- オープンデータセット連携セクション -->
+            <section class="panel-section">
+                <h3 class="panel-title">
+                    <span class="material-symbols-outlined">public</span>
+                    <?php echo esc_html__('外部オープンデータセット連携 (Hugging Face)', 'fourier'); ?>
+                </h3>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    Hugging Faceで公開されているThe Pile, RedPajama, Alpacaなどの主要データセットから、必要な件数をサンプリングして直接インポートします。
+                </p>
+
+                <div style="background: var(--bg-body, #fafafa); padding: 1.5rem; border: 1px solid var(--border-subtle); border-radius: 6px; margin-bottom: 1.5rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1rem;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;"><?php echo esc_html__('プリセットから選択', 'fourier'); ?></label>
+                            <select id="hf-preset-select" class="auth-input" style="margin-bottom: 0;">
+                                <option value="">-- 選択してください --</option>
+                                <option value="llm-jp/llm-jp-corpus">llm-jp-corpus (理研/NII)</option>
+                                <option value="elyza/ELYZA-tasks-100">ELYZA-tasks-100 (日本語評価/指示)</option>
+                                <option value="kunishou/databricks-dolly-15k-ja">Dolly 15k 日本語訳 (kunishou)</option>
+                                <option value="izumi-lab/llm-japanese-dataset">LLM Japanese Dataset (izumi-lab)</option>
+                                <option value="fujiki/japanese_alpaca_data">Alpaca 日本語 (fujiki)</option>
+                                <option value="cyberagent/chatbot-arena-ja-calibrated">Chatbot Arena JA (CyberAgent)</option>
+                                <option value="databricks/databricks-dolly-15k">Dolly (databricks-dolly-15k)</option>
+                                <option value="yahma/alpaca-cleaned">Alpaca (alpaca-cleaned)</option>
+                                <option value="OpenAssistant/oasst1">OASST1 (Open Assistant)</option>
+                                <option value="togethercomputer/RedPajama-Data-1T">RedPajama-Data-1T</option>
+                                <option value="EleutherAI/the_pile_deduplicated">The Pile (deduplicated)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;"><?php echo esc_html__('または、Dataset ID を手動入力', 'fourier'); ?></label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="hf-dataset-id" class="auth-input" style="margin-bottom: 0;" placeholder="例: user/dataset-name">
+                                <button type="button" id="btn-hf-load" class="btn-base btn-primary" style="white-space: nowrap;">読み込む</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- アクセストークン入力 (Gated/Private用) -->
+                    <div style="margin-bottom: 1rem; border-top: 1px dashed var(--border-subtle); padding-top: 1rem;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;"><?php echo esc_html__('Hugging Face Access Token (任意: Gated/Private用)', 'fourier'); ?></label>
+                        <input type="password" id="hf-access-token" class="auth-input" style="margin-bottom: 0;" placeholder="hf_...">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">※llm-jp-corpusなどのGated Datasetを取得する場合はトークンが必要です。</span>
+                    </div>
+
+                    <!-- 設定ロード後の表示領域 -->
+                    <div id="hf-config-area" style="display: none; border-top: 1px solid var(--border-subtle); padding-top: 1rem; margin-top: 1rem;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1rem;">
+                            <div>
+                                <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;">Config (サブセット)</label>
+                                <select id="hf-config-select" class="auth-input" style="margin-bottom: 0;"></select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;">Split (分割)</label>
+                                <select id="hf-split-select" class="auth-input" style="margin-bottom: 0;"></select>
+                            </div>
+                        </div>
+                        
+                        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 0.8rem; border-radius: 4px; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+                            <div><strong>データセット規模:</strong> <span id="hf-dataset-size-info">情報を取得中...</span></div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1rem;">
+                            <div>
+                                <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;">取得件数 (Limit)</label>
+                                <input type="number" id="hf-limit" class="auth-input" style="margin-bottom: 0;" value="100" min="1" max="10000">
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);">※推奨: テスト時は100件程度、最大1万件</span>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;">開始位置 (Offset)</label>
+                                <input type="number" id="hf-offset" class="auth-input" style="margin-bottom: 0;" value="0" min="0">
+                            </div>
+                        </div>
+
+                        <div style="text-align: right;">
+                            <button type="button" id="btn-hf-preview" class="btn-base btn-primary" style="background: var(--text-primary); color: #fff;">
+                                <span class="material-symbols-outlined" style="font-size: 1.2rem;">visibility</span> プレビュー取得
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- プレビュー結果表示領域 -->
+                <div id="hf-preview-area" style="display: none;">
+                    <div style="background: var(--bg-surface); padding: 1.5rem; border: 1px solid var(--border-subtle); border-radius: 6px; margin-bottom: 1.5rem;">
+                        <h4 style="margin-top: 0; margin-bottom: 1rem;">カラムマッピング設定</h4>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">外部データセットのカラムを、システム内の「Instruction形式」「プレーンテキスト形式」などにどう割り当てるか設定してください。</p>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                            <label style="font-size: 0.85rem; font-weight: 500;">取り込みフォーマット</label>
+                            <select id="hf-target-format" class="auth-input" style="margin-bottom: 0;">
+                                <option value="instruction">Instruction (指示・回答)</option>
+                                <option value="dpo">DPO (良い回答・悪い回答)</option>
+                                <option value="text">Raw Text (プレーンテキスト)</option>
+                            </select>
+                        </div>
+
+                        <div id="hf-mapping-container" style="background: var(--bg-body); padding: 1rem; border-radius: 4px;">
+                            <!-- JSで動的にマッピング項目を生成 -->
+                        </div>
+                    </div>
+
+                    <div class="preview-table-wrapper" style="display: block;">
+                        <table class="data-sheet">
+                            <thead>
+                                <tr id="hf-preview-thead">
+                                    <!-- JSでカラム名挿入 -->
+                                </tr>
+                            </thead>
+                            <tbody id="hf-preview-tbody">
+                                <!-- JSでデータ挿入 -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 2rem;">
+                        <button type="button" id="btn-execute-hf-import" class="btn-base btn-primary" style="background: var(--text-primary); color: #fff;">
+                            <span class="material-symbols-outlined">publish</span>
+                            <?php echo esc_html__('マッピングしてインポート実行', 'fourier'); ?>
+                        </button>
+                    </div>
+
+                    <div class="progress-wrapper" id="hf-import-progress">
+                        <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:0.3rem;">
+                            <span>インポート中...</span>
+                            <span id="hf-import-progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar"><div class="progress-fill" id="hf-import-progress-fill"></div></div>
+                    </div>
+                </div>
+            </section>
+
             <!-- エクスポートセクション -->
             <section class="panel-section">
                 <h3 class="panel-title">
@@ -632,6 +764,296 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             chkItems.forEach(c => {
                 c.addEventListener('change', function() {
                     if (this.checked) chkAll.checked = false;
+                });
+            });
+        }
+
+        // ==========================================
+        // Hugging Face Open Dataset Import Logic
+        // ==========================================
+        const hfPresetSelect = document.getElementById('hf-preset-select');
+        const hfDatasetIdInput = document.getElementById('hf-dataset-id');
+        const btnHfLoad = document.getElementById('btn-hf-load');
+        const hfConfigArea = document.getElementById('hf-config-area');
+        const hfConfigSelect = document.getElementById('hf-config-select');
+        const hfSplitSelect = document.getElementById('hf-split-select');
+        const btnHfPreview = document.getElementById('btn-hf-preview');
+        const hfPreviewArea = document.getElementById('hf-preview-area');
+        const hfPreviewThead = document.getElementById('hf-preview-thead');
+        const hfPreviewTbody = document.getElementById('hf-preview-tbody');
+        const hfMappingContainer = document.getElementById('hf-mapping-container');
+        const hfTargetFormat = document.getElementById('hf-target-format');
+        const btnExecuteHfImport = document.getElementById('btn-execute-hf-import');
+        
+        let currentHfFeatures = [];
+        let currentHfRows = [];
+
+        if (hfPresetSelect) {
+            hfPresetSelect.addEventListener('change', function() {
+                if (this.value) {
+                    hfDatasetIdInput.value = this.value;
+                }
+            });
+        }
+
+        if (btnHfLoad) {
+            btnHfLoad.addEventListener('click', async function() {
+                const datasetId = hfDatasetIdInput.value.trim();
+                if (!datasetId) {
+                    alert('Dataset IDを入力してください。');
+                    return;
+                }
+                
+                btnHfLoad.textContent = '読み込み中...';
+                btnHfLoad.disabled = true;
+                
+                try {
+                    const hfToken = document.getElementById('hf-access-token')?.value.trim();
+                    const fetchOptions = hfToken ? { headers: { 'Authorization': `Bearer ${hfToken}` } } : {};
+                    const res = await fetch(`https://datasets-server.huggingface.co/splits?dataset=${encodeURIComponent(datasetId)}`, fetchOptions);
+                    const data = await res.json();
+                    
+                    if (data.error) {
+                        alert('APIエラー: ' + data.error);
+                        throw new Error(data.error);
+                    }
+
+                    const splits = data.splits || [];
+                    if (splits.length === 0) {
+                        alert('利用可能なSplitが見つかりませんでした。');
+                        return;
+                    }
+
+                    // configsを抽出
+                    const configs = [...new Set(splits.map(s => s.config))];
+                    hfConfigSelect.innerHTML = configs.map(c => `<option value="${c}">${c}</option>`).join('');
+                    
+                    // configが変わったらsplitを更新する関数
+                    const updateSplits = () => {
+                        const selectedConfig = hfConfigSelect.value;
+                        const availableSplits = splits.filter(s => s.config === selectedConfig).map(s => s.split);
+                        hfSplitSelect.innerHTML = availableSplits.map(s => `<option value="${s}">${s}</option>`).join('');
+                    };
+                    
+                    hfConfigSelect.addEventListener('change', updateSplits);
+                    updateSplits();
+                    
+                    hfConfigArea.style.display = 'block';
+                    hfPreviewArea.style.display = 'none';
+
+                    // データセットの規模（行数など）を非同期で取得
+                    const sizeInfoEl = document.getElementById('hf-dataset-size-info');
+                    sizeInfoEl.textContent = '取得中...';
+                    fetch(`https://datasets-server.huggingface.co/size?dataset=${encodeURIComponent(datasetId)}`, fetchOptions)
+                        .then(r => r.json())
+                        .then(sizeData => {
+                            if (sizeData && sizeData.size && sizeData.size.dataset) {
+                                const rows = sizeData.size.dataset.num_rows || 0;
+                                const bytes = sizeData.size.dataset.num_bytes_original_files || 0;
+                                const gb = (bytes / (1024 ** 3)).toFixed(2);
+                                sizeInfoEl.textContent = `総データ数: ${rows.toLocaleString()} 件 (約 ${gb} GB)`;
+                            } else {
+                                sizeInfoEl.textContent = '取得失敗';
+                            }
+                        })
+                        .catch(() => {
+                            sizeInfoEl.textContent = '取得失敗';
+                        });
+
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    btnHfLoad.textContent = '読み込む';
+                    btnHfLoad.disabled = false;
+                }
+            });
+        }
+
+        if (btnHfPreview) {
+            btnHfPreview.addEventListener('click', async function() {
+                const datasetId = hfDatasetIdInput.value.trim();
+                const config = hfConfigSelect.value;
+                const split = hfSplitSelect.value;
+                const limit = document.getElementById('hf-limit').value || 100;
+                const offset = document.getElementById('hf-offset').value || 0;
+                
+                btnHfPreview.textContent = '取得中...';
+                btnHfPreview.disabled = true;
+                
+                try {
+                    const hfToken = document.getElementById('hf-access-token')?.value.trim();
+                    const fetchOptions = hfToken ? { headers: { 'Authorization': `Bearer ${hfToken}` } } : {};
+                    const url = `https://datasets-server.huggingface.co/rows?dataset=${encodeURIComponent(datasetId)}&config=${encodeURIComponent(config)}&split=${encodeURIComponent(split)}&offset=${offset}&length=${limit}`;
+                    const res = await fetch(url, fetchOptions);
+                    const data = await res.json();
+                    
+                    if (data.error) {
+                        alert('APIエラー: ' + data.error);
+                        throw new Error(data.error);
+                    }
+
+                    currentHfFeatures = data.features || [];
+                    currentHfRows = (data.rows || []).map(r => r.row);
+                    
+                    renderHfPreview();
+                    renderHfMapping();
+                    hfPreviewArea.style.display = 'block';
+
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    btnHfPreview.innerHTML = '<span class="material-symbols-outlined" style="font-size: 1.2rem;">visibility</span> プレビュー取得';
+                    btnHfPreview.disabled = false;
+                }
+            });
+        }
+        
+        function renderHfPreview() {
+            hfPreviewThead.innerHTML = currentHfFeatures.map(f => `<th>${escHtml(f.name)}</th>`).join('');
+            
+            let tbodyHtml = '';
+            // 最大5件だけプレビュー
+            const previewLimit = Math.min(currentHfRows.length, 5);
+            for (let i = 0; i < previewLimit; i++) {
+                const row = currentHfRows[i];
+                const tr = document.createElement('tr');
+                let tdHtml = '';
+                currentHfFeatures.forEach(f => {
+                    let val = row[f.name];
+                    if (typeof val === 'object') val = JSON.stringify(val);
+                    const displayVal = val !== undefined && val !== null ? String(val).substring(0, 50) + (String(val).length > 50 ? '...' : '') : '';
+                    tdHtml += `<td>${escHtml(displayVal)}</td>`;
+                });
+                tbodyHtml += `<tr>${tdHtml}</tr>`;
+            }
+            if (currentHfRows.length > 5) {
+                tbodyHtml += `<tr><td colspan="${currentHfFeatures.length}" style="text-align:center; color:#999;">... 他 ${currentHfRows.length - 5}件 ...</td></tr>`;
+            }
+            hfPreviewTbody.innerHTML = tbodyHtml;
+        }
+
+        function renderHfMapping() {
+            const format = hfTargetFormat.value;
+            let fields = [];
+            if (format === 'instruction') {
+                fields = [{id: 'hf-map-instruction', label: 'Instruction (指示)'}, {id: 'hf-map-output', label: 'Output (回答)'}];
+            } else if (format === 'dpo') {
+                fields = [{id: 'hf-map-prompt', label: 'Prompt'}, {id: 'hf-map-chosen', label: 'Chosen'}, {id: 'hf-map-rejected', label: 'Rejected'}];
+            } else if (format === 'text') {
+                fields = [{id: 'hf-map-text', label: 'Text (本文)'}];
+            }
+            
+            const optionsHtml = `<option value="">-- 無視する --</option>` + currentHfFeatures.map(f => `<option value="${f.name}">${f.name}</option>`).join('');
+            
+            hfMappingContainer.innerHTML = fields.map(field => `
+                <div style="margin-bottom: 0.8rem; display: flex; align-items: center; gap: 1rem;">
+                    <label style="width: 150px; font-size: 0.85rem;">${field.label}</label>
+                    <select id="${field.id}" class="auth-input" style="margin-bottom: 0; width: auto;">
+                        ${optionsHtml}
+                    </select>
+                </div>
+            `).join('');
+            
+            // 自動マッピングの試み (単純なヒューリスティック)
+            if (format === 'instruction') {
+                autoSelect('hf-map-instruction', ['instruction', 'prompt', 'question']);
+                autoSelect('hf-map-output', ['output', 'response', 'answer']);
+            } else if (format === 'text') {
+                autoSelect('hf-map-text', ['text', 'content']);
+            }
+        }
+        
+        function autoSelect(selectId, hints) {
+            const el = document.getElementById(selectId);
+            if (!el) return;
+            for (let i = 0; i < el.options.length; i++) {
+                const val = el.options[i].value.toLowerCase();
+                if (hints.some(h => val.includes(h))) {
+                    el.selectedIndex = i;
+                    return;
+                }
+            }
+        }
+
+        if (hfTargetFormat) {
+            hfTargetFormat.addEventListener('change', renderHfMapping);
+        }
+
+        if (btnExecuteHfImport) {
+            btnExecuteHfImport.addEventListener('click', function() {
+                if (currentHfRows.length === 0) return;
+                
+                const format = hfTargetFormat.value;
+                const mapping = {};
+                if (format === 'instruction') {
+                    mapping.instruction = document.getElementById('hf-map-instruction')?.value;
+                    mapping.output = document.getElementById('hf-map-output')?.value;
+                    if (!mapping.instruction || !mapping.output) { alert('マッピングが不完全です。'); return; }
+                } else if (format === 'dpo') {
+                    mapping.prompt = document.getElementById('hf-map-prompt')?.value;
+                    mapping.chosen = document.getElementById('hf-map-chosen')?.value;
+                    mapping.rejected = document.getElementById('hf-map-rejected')?.value;
+                } else if (format === 'text') {
+                    mapping.text = document.getElementById('hf-map-text')?.value;
+                    if (!mapping.text) { alert('Textのマッピングが必要です。'); return; }
+                }
+                
+                const mappedData = currentHfRows.map(row => {
+                    const item = {};
+                    if (format === 'instruction') {
+                        item.instruction = row[mapping.instruction];
+                        item.output = row[mapping.output];
+                    } else if (format === 'dpo') {
+                        item.prompt = row[mapping.prompt];
+                        item.chosen = row[mapping.chosen];
+                        item.rejected = row[mapping.rejected];
+                    } else if (format === 'text') {
+                        item.text = row[mapping.text];
+                    }
+                    return item;
+                });
+                
+                // 既存のインポートAPIを利用
+                const finalPayload = {
+                    title: `[Import] ${hfDatasetIdInput.value}`,
+                    format: format,
+                    data: mappedData
+                };
+
+                btnExecuteHfImport.disabled = true;
+                const progressWrapper = document.getElementById('hf-import-progress');
+                const progressFill = document.getElementById('hf-import-progress-fill');
+                const progressText = document.getElementById('hf-import-progress-text');
+                
+                progressWrapper.style.display = 'block';
+                progressFill.style.width = '50%';
+                progressText.textContent = '送信中...';
+                
+                const fd = new FormData();
+                fd.append('action', 'import_learning_data');
+                fd.append('nonce', uploadNonce);
+                fd.append('data', JSON.stringify([finalPayload]));
+                
+                fetch(ajaxUrl, {
+                    method: 'POST',
+                    body: fd
+                })
+                .then(r => r.json())
+                .then(res => {
+                    progressFill.style.width = '100%';
+                    progressText.textContent = '100%';
+                    setTimeout(() => {
+                        if (res.success) {
+                            alert(res.data.message);
+                            window.location.reload();
+                        } else {
+                            alert(res.data.message || 'インポート失敗');
+                            btnExecuteHfImport.disabled = false;
+                        }
+                    }, 500);
+                }).catch(e => {
+                    alert('通信エラー');
+                    btnExecuteHfImport.disabled = false;
                 });
             });
         }
