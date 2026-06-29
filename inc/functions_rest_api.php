@@ -191,7 +191,7 @@ function fourier_rest_create_learning_data($request) {
             update_post_meta($post_id, 'is_learning_data', '1');
             update_post_meta($post_id, 'learning_format', sanitize_text_field($item['format']));
             if (isset($item['source'])) {
-                update_post_meta($post_id, 'learning_data_source', sanitize_text_field($item['source']));
+                update_post_meta($post_id, 'learning_source', sanitize_text_field($item['source']));
             }
             $inserted_ids[] = $post_id;
         }
@@ -260,7 +260,7 @@ function fourier_rest_update_learning_data($request) {
     }
     
     if (isset($params['source'])) {
-        update_post_meta($post_id, 'learning_data_source', sanitize_text_field($params['source']));
+        update_post_meta($post_id, 'learning_source', sanitize_text_field($params['source']));
     }
 
     return rest_ensure_response([

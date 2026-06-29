@@ -236,7 +236,9 @@ function frontend_learning_data_import_preview_handler()
     $file = $_FILES['import_file'];
     $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
     $content = file_get_contents($file['tmp_name']);
-    
+
+    $force_format = isset($_POST['force_format']) ? sanitize_text_field($_POST['force_format']) : 'auto';
+
     $parsed_items = [];
     $errors = [];
 
@@ -250,14 +252,14 @@ function frontend_learning_data_import_preview_handler()
                 $errors[] = sprintf(esc_html__('行 %d: JSONの解析に失敗しました。', 'fourier'), $index + 1);
                 continue;
             }
-            $parsed_items[] = _detect_and_format_import_item($json);
+            $parsed_items[] = _detect_and_format_import_item($json, $force_format);
         }
     } else if ($ext === 'json') {
         $json = json_decode($content, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             wp_send_json_error(['message' => esc_html__('JSONの解析に失敗しました。', 'fourier')]);
         }
-        
+
         // もし LLM 出力のような { "draft_thought": "...", "data": [...] } の形式なら "data" 配列を抽出する
         if (is_array($json) && !wp_is_numeric_array($json) && isset($json['data']) && is_array($json['data'])) {
             $json = $json['data'];
@@ -265,10 +267,10 @@ function frontend_learning_data_import_preview_handler()
 
         if (wp_is_numeric_array($json)) {
             foreach ($json as $index => $item) {
-                $parsed_items[] = _detect_and_format_import_item($item);
+                $parsed_items[] = _detect_and_format_import_item($item, $force_format);
             }
         } else {
-            $parsed_items[] = _detect_and_format_import_item($json);
+            $parsed_items[] = _detect_and_format_import_item($json, $force_format);
         }
     } else if ($ext === 'csv') {
         $rows = array_map('str_getcsv', explode("\n", trim($content)));
@@ -276,7 +278,7 @@ function frontend_learning_data_import_preview_handler()
         foreach ($rows as $index => $row) {
             if (count($header) !== count($row)) continue;
             $item = array_combine($header, $row);
-            $parsed_items[] = _detect_and_format_import_item($item);
+            $parsed_items[] = _detect_and_format_import_item($item, $force_format);
         }
     } else {
         wp_send_json_error(['message' => esc_html__('対応していないファイル形式です。', 'fourier')]);
@@ -317,7 +319,7 @@ function frontend_learning_data_import_execute_handler()
     $imported = 0;
     foreach ($items as $item) {
         $title = isset($item['title']) && $item['title'] !== '' ? sanitize_text_field($item['title']) : esc_html__('インポートデータ', 'fourier') . ' ' . date('Ymd_His');
-        
+
         $post_data = [
             'post_title'   => $title,
             'post_content' => wp_slash(json_encode([
@@ -331,7 +333,7 @@ function frontend_learning_data_import_execute_handler()
         $post_id = wp_insert_post($post_data);
         if (!is_wp_error($post_id) && $post_id > 0) {
             update_post_meta($post_id, 'is_learning_data', '1');
-            
+
             // 簡易POST配列を作ってフック実行
             $mock_post = [
                 'json_data' => wp_slash(json_encode(['format' => $item['format']])),
@@ -350,38 +352,58 @@ function frontend_learning_data_import_execute_handler()
 }
 
 // ヘルパー: フォーマットの自動推測
-function _detect_and_format_import_item($raw)
+function _detect_and_format_import_item($raw, $force_format = 'auto')
 {
     $format = 'structured';
     $data = $raw;
 
-    if (isset($raw['instruction']) && isset($raw['output'])) {
+    // ネストされたdata配列がある場合のチェック用
+    $check_target = isset($raw['data']) && is_array($raw['data']) ? $raw['data'] : $raw;
+
+    if ($force_format !== 'auto') {
+        $format = $force_format;
+    } else if (isset($check_target['instruction']) && isset($check_target['output'])) {
         $format = 'instruction';
-    } else if (isset($raw['messages']) && is_array($raw['messages'])) {
+    } else if (isset($check_target['messages']) && is_array($check_target['messages'])) {
         $format = 'chatml';
-    } else if (isset($raw['conversations']) && is_array($raw['conversations'])) {
+    } else if (isset($check_target['conversations']) && is_array($check_target['conversations'])) {
         $format = 'sharegpt';
-    } else if (isset($raw['question']) && isset($raw['thought']) && isset($raw['answer'])) {
+    } else if (isset($check_target['question']) && isset($check_target['thought']) && isset($check_target['answer'])) {
         $format = 'cot';
-    } else if (isset($raw['prompt']) && isset($raw['chosen']) && isset($raw['rejected'])) {
+    } else if (isset($check_target['prompt']) && isset($check_target['chosen']) && isset($check_target['rejected'])) {
         $format = 'dpo';
-    } else if (isset($raw['html']) || isset($raw['css']) || isset($raw['js'])) {
+    } else if (isset($check_target['html']) || isset($check_target['css']) || isset($check_target['js'])) {
         $format = 'frontend_code';
-    } else if (isset($raw['text']) && count($raw) === 1) {
+    } else if (isset($check_target['text']) && count($check_target) === 1) {
         $format = 'plain';
+    } else if (is_array($check_target) && wp_is_numeric_array($check_target) && !empty($check_target)) {
+        // 配列（リスト）パターンのフォールバック
+        $first = $check_target[0];
+        if (isset($first['instruction']) && isset($first['output'])) {
+            $format = 'instruction';
+        } else if (isset($first['role'])) {
+            $format = 'chatml';
+        } else if (isset($first['from'])) {
+            $format = 'sharegpt';
+        } else if (isset($first['question']) && isset($first['thought']) && isset($first['answer'])) {
+            $format = 'cot';
+        } else if (isset($first['prompt']) && isset($first['chosen']) && isset($first['rejected'])) {
+            $format = 'dpo';
+        }
     }
 
     return [
         'title'  => isset($raw['title']) ? $raw['title'] : '',
         'format' => $format,
-        'data'   => $data
+        'data'   => $check_target
     ];
 }
 
 /*--------------------------------------------------------------
   エクスポート
 --------------------------------------------------------------*/
-function fourier_format_learning_data($item, $output_style) {
+function fourier_format_learning_data($item, $output_style)
+{
     if ($output_style === 'sara') {
         return [
             'event_uid' => 'ld_' . md5($item['title'] . wp_generate_password(8, false)),
@@ -424,7 +446,7 @@ function fourier_format_learning_data($item, $output_style) {
         }
         return ['text' => trim($text)];
     }
-    
+
     // raw (default)
     $data = is_array($item['data']) ? $item['data'] : ['text' => $item['data']];
     $is_list = false;
@@ -438,7 +460,7 @@ function fourier_format_learning_data($item, $output_style) {
             }
         }
     }
-    
+
     if ($is_list) {
         return ['title' => $item['title'], 'data' => $data];
     }
@@ -455,7 +477,7 @@ function frontend_learning_data_export_handler()
     }
 
     $export_format = isset($_POST['export_format']) ? sanitize_text_field($_POST['export_format']) : 'jsonl';
-    
+
     $target_formats = [];
     if (isset($_POST['formats'])) {
         $posted_formats = wp_unslash($_POST['formats']);
@@ -465,7 +487,7 @@ function frontend_learning_data_export_handler()
             $target_formats = explode(',', sanitize_text_field($posted_formats));
         }
     }
-    
+
     $args = [
         'post_type'      => 'post',
         'post_status'    => 'publish',
@@ -474,14 +496,6 @@ function frontend_learning_data_export_handler()
             ['key' => 'is_learning_data', 'value' => '1']
         ]
     ];
-
-    if (!empty($target_formats) && !in_array('all', $target_formats)) {
-        $args['meta_query'][] = [
-            'key' => 'learning_format',
-            'value' => $target_formats,
-            'compare' => 'IN'
-        ];
-    }
 
     $query = new WP_Query($args);
     $export_data = [];
@@ -492,14 +506,23 @@ function frontend_learning_data_export_handler()
             $content = json_decode(get_the_content(), true);
             if (!$content) continue;
 
+            $post_format = isset($content['format']) ? $content['format'] : 'structured';
+
+            // フィルタリング: target_formatsがallでない場合、JSON内のformatが一致するかチェック
+            if (!empty($target_formats) && !in_array('all', $target_formats)) {
+                if (!in_array($post_format, $target_formats)) {
+                    continue;
+                }
+            }
+
             $item = [
                 'title' => get_the_title(),
-                'format' => isset($content['format']) ? $content['format'] : '',
+                'format' => $post_format,
                 'data' => isset($content['data']) ? $content['data'] : []
             ];
 
             $output_style = isset($_REQUEST['output_style']) ? sanitize_text_field($_REQUEST['output_style']) : 'raw';
-            
+
             if ($export_format === 'csv') {
                 $flat = ['title' => $item['title'], 'format' => $item['format']];
                 if (is_array($item['data'])) {
@@ -529,7 +552,7 @@ function frontend_learning_data_export_handler()
         $output = fopen('php://output', 'w');
         // UTF-8 BOM for Excel
         fwrite($output, "\xEF\xBB\xBF");
-        
+
         // ヘッダー抽出
         $headers = [];
         foreach ($export_data as $row) {
@@ -538,7 +561,7 @@ function frontend_learning_data_export_handler()
             }
         }
         fputcsv($output, $headers);
-        
+
         foreach ($export_data as $row) {
             $csv_row = [];
             foreach ($headers as $h) {
@@ -571,12 +594,18 @@ function frontend_learning_data_statistics_handler()
     }
 
     global $wpdb;
-    
+
     // 全データ件数とフォーマット別集計
     $total_count = 0;
     $format_counts = [
-        'plain' => 0, 'instruction' => 0, 'chatml' => 0,
-        'sharegpt' => 0, 'cot' => 0, 'dpo' => 0, 'frontend_code' => 0, 'structured' => 0
+        'plain' => 0,
+        'instruction' => 0,
+        'chatml' => 0,
+        'sharegpt' => 0,
+        'cot' => 0,
+        'dpo' => 0,
+        'frontend_code' => 0,
+        'structured' => 0
     ];
     $total_chars = 0;
 
@@ -587,7 +616,7 @@ function frontend_learning_data_statistics_handler()
         'meta_query' => [['key' => 'is_learning_data', 'value' => '1']]
     ];
     $query = new WP_Query($args);
-    
+
     if ($query->have_posts()) {
         $total_count = $query->found_posts;
         while ($query->have_posts()) {
@@ -620,7 +649,7 @@ function frontend_learning_data_statistics_handler()
             AND p.post_date >= %s
             GROUP BY DATE(post_date) ORDER BY date ASC";
     $results = $wpdb->get_results($wpdb->prepare($sql, $thirty_days_ago));
-    
+
     // 0埋め
     for ($i = 29; $i >= 0; $i--) {
         $d = date('Y-m-d', strtotime("-{$i} days"));
@@ -633,8 +662,11 @@ function frontend_learning_data_statistics_handler()
     // 最新10件
     $recent = [];
     $query_recent = new WP_Query([
-        'post_type' => 'post', 'post_status' => 'publish',
-        'posts_per_page' => 10, 'orderby' => 'date', 'order' => 'DESC',
+        'post_type' => 'post',
+        'post_status' => 'publish',
+        'posts_per_page' => 10,
+        'orderby' => 'date',
+        'order' => 'DESC',
         'meta_query' => [['key' => 'is_learning_data', 'value' => '1']]
     ]);
     if ($query_recent->have_posts()) {

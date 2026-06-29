@@ -830,16 +830,17 @@ function frontend_learning_data_scrape_url_handler()
     }
 
     update_post_meta($post_id, 'is_learning_data', '1');
+    update_post_meta($post_id, 'learning_format', $target_format);
     $meta_fields = ['language', 'category', 'difficulty', 'quality', 'source', 'tags'];
     foreach ($meta_fields as $field) {
         if (isset($_POST[$field]) && $_POST[$field] !== '') {
             $val = sanitize_text_field($_POST[$field]);
-            update_post_meta($post_id, 'learning_data_' . $field, $val);
+            update_post_meta($post_id, 'learning_' . $field, $val);
         }
     }
     // ソースがない場合はURLをソースにする
     if (empty($_POST['source'])) {
-        update_post_meta($post_id, 'learning_data_source', $url);
+        update_post_meta($post_id, 'learning_source', $url);
     }
 
     wp_send_json_success(['post_id' => $post_id, 'log' => $llm_raw_text]);
@@ -961,12 +962,13 @@ function frontend_learning_data_distill_from_seed_handler()
     }
 
     update_post_meta($post_id, 'is_learning_data', '1');
+    update_post_meta($post_id, 'learning_format', $target_format);
 
     $meta_fields = ['language', 'category', 'difficulty', 'quality', 'source', 'tags'];
     foreach ($meta_fields as $field) {
         if (isset($_POST[$field]) && $_POST[$field] !== '') {
             $val = sanitize_text_field($_POST[$field]);
-            update_post_meta($post_id, 'learning_data_' . $field, $val);
+            update_post_meta($post_id, 'learning_' . $field, $val);
         }
     }
 
@@ -1154,8 +1156,9 @@ function frontend_learning_data_bot_crawl_handler() {
     }
 
     update_post_meta($post_id, 'is_learning_data', '1');
-    update_post_meta($post_id, 'learning_data_source', $url);
-    update_post_meta($post_id, 'learning_data_category', 'bot_crawled');
+    update_post_meta($post_id, 'learning_format', 'structured'); // Bot default
+    update_post_meta($post_id, 'learning_source', $url);
+    update_post_meta($post_id, 'learning_category', 'bot_crawled');
 
     wp_send_json_success(['post_id' => $post_id, 'title' => $title]);
 }

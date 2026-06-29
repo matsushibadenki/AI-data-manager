@@ -33,6 +33,42 @@ $upload_nonce = wp_create_nonce('learning_data_action');
 ?>
 
 <style>
+
+.learning-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-subtle, #eee);
+    padding-bottom: 0.5rem;
+    overflow-x: auto;
+}
+.learning-tab {
+    padding: 0.75rem 1.25rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-secondary, #666);
+    border-radius: var(--radius-md, 4px);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.learning-tab:hover {
+    background: var(--bg-surface-hover, #f5f5f5);
+}
+.learning-tab.active {
+    background: var(--bg-surface, #fff);
+    color: var(--text-primary, #000);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border: 1px solid var(--border-subtle, #eee);
+}
+.learning-tab-content {
+    display: none;
+}
+.learning-tab-content.active {
+    display: block;
+}
+
 /* 既存の変数とスタイルを踏襲 */
 .import-export-container {
     max-width: 1000px;
@@ -233,12 +269,34 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 </p>
             </div>
 
+
+            <div class="learning-tabs">
+                <button type="button" class="learning-tab active" data-target="tab-import">インポート</button>
+                <button type="button" class="learning-tab" data-target="tab-export">エクスポート</button>
+                <button type="button" class="learning-tab" data-target="tab-external">外部オープンデータセット連携</button>
+            </div>
+
             <!-- インポートセクション -->
-            <section class="panel-section">
+            <section id="tab-import" class="panel-section learning-tab-content active">
                 <h3 class="panel-title">
                     <span class="material-symbols-outlined">upload_file</span>
                     <?php echo esc_html__('データインポート', 'fourier'); ?>
                 </h3>
+
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem;"><?php echo esc_html__('読み込みフォーマットの指定 (任意):', 'fourier'); ?></label>
+                    <select id="import-force-format" class="auth-input" style="max-width: 300px; margin-bottom: 0;">
+                        <option value="auto">自動推定 (Auto)</option>
+                        <option value="chatml">ChatML</option>
+                        <option value="sharegpt">ShareGPT</option>
+                        <option value="instruction">Instruction</option>
+                        <option value="cot">CoT</option>
+                        <option value="dpo">DPO / RLHF</option>
+                        <option value="frontend_code">Frontend Code</option>
+                        <option value="plain">プレーンテキスト</option>
+                        <option value="structured">構造化データ</option>
+                    </select>
+                </div>
 
                 <div class="drop-zone" id="drop-zone">
                     <div class="drop-zone-content">
@@ -255,6 +313,42 @@ $upload_nonce = wp_create_nonce('learning_data_action');
 
                 <!-- テンプレートダウンロード -->
                 <style>
+
+.learning-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-subtle, #eee);
+    padding-bottom: 0.5rem;
+    overflow-x: auto;
+}
+.learning-tab {
+    padding: 0.75rem 1.25rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-secondary, #666);
+    border-radius: var(--radius-md, 4px);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.learning-tab:hover {
+    background: var(--bg-surface-hover, #f5f5f5);
+}
+.learning-tab.active {
+    background: var(--bg-surface, #fff);
+    color: var(--text-primary, #000);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border: 1px solid var(--border-subtle, #eee);
+}
+.learning-tab-content {
+    display: none;
+}
+.learning-tab-content.active {
+    display: block;
+}
+
                 .template-dl-btn {
                     font-size: 0.75rem;
                     padding: 0.25rem 0.6rem;
@@ -346,7 +440,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             </section>
 
             <!-- オープンデータセット連携セクション -->
-            <section class="panel-section">
+            <section id="tab-external" class="panel-section learning-tab-content">
                 <h3 class="panel-title">
                     <span class="material-symbols-outlined">public</span>
                     <?php echo esc_html__('外部オープンデータセット連携 (Hugging Face)', 'fourier'); ?>
@@ -478,7 +572,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             </section>
 
             <!-- エクスポートセクション -->
-            <section class="panel-section">
+            <section id="tab-export" class="panel-section learning-tab-content">
                 <h3 class="panel-title">
                     <span class="material-symbols-outlined">download</span>
                     <?php echo esc_html__('データエクスポート', 'fourier'); ?>
@@ -536,6 +630,23 @@ $upload_nonce = wp_create_nonce('learning_data_action');
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // タブ切り替え処理
+        const tabs = document.querySelectorAll('.learning-tab');
+        const contents = document.querySelectorAll('.learning-tab-content');
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Remove active from all tabs and contents
+                tabs.forEach(t => t.classList.remove('active'));
+                contents.forEach(c => c.classList.remove('active'));
+                
+                // Add active to clicked tab and corresponding content
+                this.classList.add('active');
+                const targetId = this.getAttribute('data-target');
+                document.getElementById(targetId).classList.add('active');
+            });
+        });
+
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const ajaxUrl = '<?php echo esc_url($ajax_url); ?>';
@@ -584,6 +695,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             fd.append('action', 'frontend_learning_data_import_preview');
             fd.append('nonce', uploadNonce);
             fd.append('import_file', file);
+            fd.append('force_format', document.getElementById('import-force-format').value);
 
             fetch(ajaxUrl, {
                 method: 'POST',
@@ -738,19 +850,46 @@ $upload_nonce = wp_create_nonce('learning_data_action');
         });
 
         function detectFormatLocally(raw) {
+            const forceFormat = document.getElementById('import-force-format') ? document.getElementById('import-force-format').value : 'auto';
             let format = 'structured';
-            if (raw.instruction && raw.output) format = 'instruction';
-            else if (raw.messages && Array.isArray(raw.messages)) format = 'chatml';
-            else if (raw.conversations && Array.isArray(raw.conversations)) format = 'sharegpt';
-            else if (raw.question && raw.thought && raw.answer) format = 'cot';
-            else if (raw.prompt && raw.chosen && raw.rejected) format = 'dpo';
-            else if (raw.html || raw.css || raw.js) format = 'frontend_code';
-            else if (raw.text && Object.keys(raw).length === 1) format = 'plain';
+            
+            let checkTarget = (raw.data && Array.isArray(raw.data)) ? raw.data : raw;
+            
+            if (forceFormat !== 'auto') {
+                format = forceFormat;
+            } else if (checkTarget.instruction && checkTarget.output) {
+                format = 'instruction';
+            } else if (checkTarget.messages && Array.isArray(checkTarget.messages)) {
+                format = 'chatml';
+            } else if (checkTarget.conversations && Array.isArray(checkTarget.conversations)) {
+                format = 'sharegpt';
+            } else if (checkTarget.question && checkTarget.thought && checkTarget.answer) {
+                format = 'cot';
+            } else if (checkTarget.prompt && checkTarget.chosen && checkTarget.rejected) {
+                format = 'dpo';
+            } else if (checkTarget.html || checkTarget.css || checkTarget.js) {
+                format = 'frontend_code';
+            } else if (checkTarget.text && Object.keys(checkTarget).length === 1) {
+                format = 'plain';
+            } else if (Array.isArray(checkTarget) && checkTarget.length > 0) {
+                const first = checkTarget[0];
+                if (first.instruction && first.output) {
+                    format = 'instruction';
+                } else if (first.role) {
+                    format = 'chatml';
+                } else if (first.from) {
+                    format = 'sharegpt';
+                } else if (first.question && first.thought && first.answer) {
+                    format = 'cot';
+                } else if (first.prompt && first.chosen && first.rejected) {
+                    format = 'dpo';
+                }
+            }
 
             return {
                 title: raw.title || '',
                 format: format,
-                data: raw
+                data: checkTarget
             };
         }
 
