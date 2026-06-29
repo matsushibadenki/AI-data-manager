@@ -1,5 +1,10 @@
 <?php
 /*
+ * ・ファイルのURLパス: file:///Users/Shared/Docker/AI-data-manager-docker/www/html/wordpress/wp-content/themes/AI-data-manager/page-api-settings.php
+ * ・ファイル名: page-api-settings.php
+ * ・コードの内容の説明: LLM API設定画面（OpenAI, Gemini, Ollama, Llama.cpp等）の表示、設定保存、およびAPI接続確認機能を提供します。
+ */
+/*
  * Template Name: API Settings
  * Description: LLM API設定画面（OpenAI, Gemini, Ollama, Llama.cpp等）
  */
@@ -151,7 +156,7 @@ get_header();
                 <input type="text" id="openai_model" name="openai_model" value="<?php echo esc_attr($openai_mod); ?>" placeholder="gpt-5.5, gpt-3.5-turbo">
             </div>
             <div style="margin-top: 1rem;">
-                <button type="button" class="btn-base btn-secondary" data-provider="openai" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <button type="button" class="btn-base btn-secondary btn-test-connection" data-provider="openai" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;"><?php echo esc_html__('接続確認', 'fourier'); ?></button>
                 <span class="test-result" id="test-result-openai" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
@@ -167,7 +172,7 @@ get_header();
                 <input type="text" id="gemini_model" name="gemini_model" value="<?php echo esc_attr($gemini_mod); ?>" placeholder="gemini-3.1-pro-preview">
             </div>
             <div style="margin-top: 1rem;">
-                <button type="button" class="btn-base btn-secondary" data-provider="gemini" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <button type="button" class="btn-base btn-secondary btn-test-connection" data-provider="gemini" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;"><?php echo esc_html__('接続確認', 'fourier'); ?></button>
                 <span class="test-result" id="test-result-gemini" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
@@ -184,7 +189,7 @@ get_header();
                 <input type="text" id="ollama_model" name="ollama_model" value="<?php echo esc_attr($ollama_mod); ?>" placeholder="gemma4:12b-mlx, gemma, etc.">
             </div>
             <div style="margin-top: 1rem;">
-                <button type="button" class="btn-base btn-secondary" data-provider="ollama" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <button type="button" class="btn-base btn-secondary btn-test-connection" data-provider="ollama" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;"><?php echo esc_html__('接続確認', 'fourier'); ?></button>
                 <span class="test-result" id="test-result-ollama" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>
@@ -201,7 +206,7 @@ get_header();
                 <input type="text" id="custom_model" name="custom_model" value="<?php echo esc_attr($custom_mod); ?>" placeholder="モデル名（サーバー側で固定の場合は空でも可）">
             </div>
             <div style="margin-top: 1rem;">
-                <button type="button" class="btn-base btn-secondary" data-provider="custom" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;">接続確認</button>
+                <button type="button" class="btn-base btn-secondary btn-test-connection" data-provider="custom" style="padding: 0.5rem 1rem; cursor:pointer; background:#eee; border:1px solid #ccc; border-radius:4px;"><?php echo esc_html__('接続確認', 'fourier'); ?></button>
                 <span class="test-result" id="test-result-custom" style="margin-left: 1rem; font-weight: 500;"></span>
             </div>
         </div>

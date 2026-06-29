@@ -24,7 +24,7 @@ function frontend_learning_data_save_meta($post_id, $post_data)
     }
 
     // フォームから送信されたメタデータ
-    $fields = ['language', 'category', 'difficulty', 'quality', 'source', 'tags'];
+    $fields = ['language', 'category', 'difficulty', 'quality', 'source', 'tags', 'speakers'];
     foreach ($fields as $field) {
         if (isset($post_data[$field]) && $post_data[$field] !== '') {
             update_post_meta($post_id, 'learning_' . $field, sanitize_text_field($post_data[$field]));
@@ -76,6 +76,7 @@ function frontend_learning_data_get_single_handler()
         'quality'    => get_post_meta($post_id, 'learning_quality', true),
         'source'     => get_post_meta($post_id, 'learning_source', true),
         'tags'       => get_post_meta($post_id, 'learning_tags', true),
+        'speakers'   => get_post_meta($post_id, 'learning_speakers', true),
     ];
 
     wp_send_json_success([

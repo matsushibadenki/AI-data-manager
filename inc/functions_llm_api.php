@@ -282,8 +282,7 @@ function _parse_json_from_llm_response($text)
     $decoded = json_decode($text, true);
     if (json_last_error() === JSON_ERROR_NONE) {
         if (!wp_is_numeric_array($decoded)) {
-            // draft_thought と data がある場合、または variations がある場合はそのまま返す
-            if ((isset($decoded['draft_thought']) && isset($decoded['data'])) || isset($decoded['variations'])) {
+            if (isset($decoded['draft_thought']) || isset($decoded['data']) || isset($decoded['variations'])) {
                 return $decoded;
             }
             return [$decoded]; // それ以外は配列に強制
@@ -299,7 +298,7 @@ function _parse_json_from_llm_response($text)
         $decoded_obj = json_decode($substr_obj, true);
         if (json_last_error() === JSON_ERROR_NONE) {
             if (!wp_is_numeric_array($decoded_obj)) {
-                if ((isset($decoded_obj['draft_thought']) && isset($decoded_obj['data'])) || isset($decoded_obj['variations'])) {
+                if (isset($decoded_obj['draft_thought']) || isset($decoded_obj['data']) || isset($decoded_obj['variations'])) {
                     return $decoded_obj;
                 }
                 return [$decoded_obj];
@@ -476,6 +475,141 @@ function llm_api_call_custom($base_url, $model, $system, $user)
     return $parsed;
 }
 
+/**
+ * LLMプロバイダに関係なく生のテキスト応答を返す共通関数。
+ * scrape/distill ハンドラ用。JSONパースやvariations処理を行わない。
+ *
+ * @param string $provider プロバイダ名 (openai|gemini|ollama|custom)
+ * @param string $system_prompt システムプロンプト
+ * @param string $user_prompt ユーザープロンプト
+ * @return string LLMの生テキスト応答
+ * @throws Exception 通信エラーやAPIエラー時
+ */
+function llm_api_call_raw($provider, $system_prompt, $user_prompt)
+{
+    $current_user_id = get_current_user_id();
+
+    switch ($provider) {
+        case 'openai':
+            $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
+            $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
+            if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
+
+            $url = 'https://api.openai.com/v1/chat/completions';
+            $body = [
+                'model' => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $system_prompt],
+                    ['role' => 'user', 'content' => $user_prompt]
+                ],
+                'response_format' => ['type' => 'json_object'],
+            ];
+
+            $response = wp_remote_post($url, [
+                'timeout' => 120,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Authorization' => 'Bearer ' . $api_key
+                ],
+                'body' => json_encode($body)
+            ]);
+
+            if (is_wp_error($response)) throw new Exception($response->get_error_message());
+            $res_body = json_decode(wp_remote_retrieve_body($response), true);
+            if (isset($res_body['error'])) throw new Exception($res_body['error']['message']);
+            return $res_body['choices'][0]['message']['content'] ?? '';
+
+        case 'gemini':
+            $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
+            $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
+            if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
+
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$api_key}";
+            $body = [
+                'system_instruction' => [
+                    'parts' => [['text' => $system_prompt]]
+                ],
+                'contents' => [
+                    [
+                        'role' => 'user',
+                        'parts' => [['text' => $user_prompt]]
+                    ]
+                ],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json'
+                ]
+            ];
+
+            $response = wp_remote_post($url, [
+                'timeout' => 120,
+                'headers' => ['Content-Type' => 'application/json'],
+                'body' => json_encode($body)
+            ]);
+
+            if (is_wp_error($response)) throw new Exception($response->get_error_message());
+            $res_body = json_decode(wp_remote_retrieve_body($response), true);
+            if (isset($res_body['error'])) throw new Exception($res_body['error']['message']);
+            return $res_body['candidates'][0]['content']['parts'][0]['text'] ?? '';
+
+        case 'ollama':
+            $base_url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
+            $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
+
+            $url = rtrim($base_url, '/') . '/api/chat';
+            $body = [
+                'model' => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $system_prompt],
+                    ['role' => 'user', 'content' => $user_prompt]
+                ],
+                'stream' => false
+                // 注意: 'format' => 'json' を意図的に外す。
+                // ローカルLLMがJSON構造を壊す原因になるため、プロンプトでJSON出力を指示する。
+            ];
+
+            $response = wp_remote_post($url, [
+                'timeout' => 1800,
+                'headers' => ['Content-Type' => 'application/json'],
+                'body' => json_encode($body)
+            ]);
+
+            if (is_wp_error($response)) throw new Exception($response->get_error_message());
+            $res_body = json_decode(wp_remote_retrieve_body($response), true);
+            if (isset($res_body['error'])) throw new Exception($res_body['error']);
+            return $res_body['message']['content'] ?? '';
+
+        case 'custom':
+            $base_url = get_user_meta($current_user_id, 'llm_custom_url', true) ?: 'http://127.0.0.1:8080/v1';
+            $model = get_user_meta($current_user_id, 'llm_custom_model', true);
+
+            $url = rtrim($base_url, '/') . '/chat/completions';
+            $body = [
+                'messages' => [
+                    ['role' => 'system', 'content' => $system_prompt],
+                    ['role' => 'user', 'content' => $user_prompt]
+                ],
+            ];
+            if ($model) $body['model'] = $model;
+
+            $response = wp_remote_post($url, [
+                'timeout' => 120,
+                'headers' => ['Content-Type' => 'application/json'],
+                'body' => json_encode($body)
+            ]);
+
+            if (is_wp_error($response)) throw new Exception($response->get_error_message());
+            $res_body = json_decode(wp_remote_retrieve_body($response), true);
+            if (isset($res_body['error'])) {
+                $err = is_array($res_body['error']) ? ($res_body['error']['message'] ?? 'Unknown Error') : $res_body['error'];
+                throw new Exception($err);
+            }
+            return $res_body['choices'][0]['message']['content'] ?? '';
+
+        default:
+            throw new Exception("不明なプロバイダです。");
+    }
+}
+
 add_action('wp_ajax_frontend_learning_data_scrape_url', 'frontend_learning_data_scrape_url_handler');
 add_action('wp_ajax_nopriv_frontend_learning_data_scrape_url', 'frontend_learning_data_scrape_url_handler');
 
@@ -633,57 +767,47 @@ function frontend_learning_data_scrape_url_handler()
     $system_prompt .= "1. 出力は必ずJSON形式のみとしてください。\n";
     $system_prompt .= "2. 最終的な結果を生成する前に、必ず内部的な推論・自己評価を `\"draft_thought\"` というキーに出力し、その後に実際のデータを配置してください。\n";
     $system_prompt .= "（例: { \"draft_thought\": \"抽出したテキストから...という論理を組み立てる\", \"data\": [ { \"instruction\": \"...\", ... } ] } ）";
-
     $user_prompt = "【指定フォーマット】: {$target_format}\n";
+    if (empty(trim($speaker_names))) {
+        $speaker_names = "インタビュアーなど不特定の話し手";
+    }
+    $user_prompt .= "【話者・登場人物の設定】: {$speaker_names}\n※会話や対談形式の場合、誰が話したかを明示し、役割や知名度などのコンテキストを反映させてください。\n";
     if ($extra_prompt) {
+
         $user_prompt .= "【追加の指示】: {$extra_prompt}\n";
     }
     $user_prompt .= "\n【抽出元データ（Web/API）】:\n{$text}\n\n";
     $user_prompt .= "この抽出元データから、フォーマットに従ったJSONを出力してください。構造は { \"draft_thought\": \"...\", \"data\": <指定フォーマットに基づくデータ> } としてください。";
 
-    // 4. LLM API 呼び出し
-    $current_user_id = get_current_user_id();
-    $llm_response_text = "";
+    // 4. LLM API 呼び出し（生テキストを取得し、ハンドラ側でパース）
+    $llm_raw_text = '';
     try {
-        switch ($provider) {
-            case 'openai':
-                $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
-                if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
-                $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
-                break;
-            case 'gemini':
-                $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
-                if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
-                $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
-                break;
-            case 'ollama':
-                $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
-                $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
-                break;
-            case 'custom':
-                $url = get_user_meta($current_user_id, 'llm_custom_url', true) ?: 'http://127.0.0.1:8080/v1';
-                $model = get_user_meta($current_user_id, 'llm_custom_model', true);
-                $llm_response_text = llm_api_call_custom($url, $model, $system_prompt, $user_prompt);
-                break;
-            default:
-                throw new Exception("不明なプロバイダです。");
-        }
+        $llm_raw_text = llm_api_call_raw($provider, $system_prompt, $user_prompt);
     } catch (Exception $e) {
         wp_send_json_error(['message' => $e->getMessage()]);
     }
 
-    if (empty($llm_response_text)) {
+    if (empty(trim($llm_raw_text))) {
         wp_send_json_error(['message' => 'LLMから有効な応答が返されませんでした。']);
     }
 
-    // 5. データ保存
-    $parsed_json = $llm_response_text; // Already parsed by llm_api_call_*
+    // 5. レスポンスのパースとデータ保存
+    try {
+        $parsed_json = _parse_json_from_llm_response($llm_raw_text);
+    } catch (Exception $e) {
+        wp_send_json_error([
+            'message' => 'LLM応答のJSONパースに失敗しました: ' . $e->getMessage(),
+            'log' => $llm_raw_text
+        ]);
+    }
+
     $final_data = $parsed_json;
-    if (is_array($parsed_json) && isset($parsed_json['draft_thought']) && isset($parsed_json['data'])) {
-        $final_data = $parsed_json['data'];
+    if (is_array($parsed_json)) {
+        if (isset($parsed_json['data'])) {
+            $final_data = $parsed_json['data'];
+        } elseif (isset($parsed_json[0]) && is_array($parsed_json[0]) && isset($parsed_json[0]['data'])) {
+            $final_data = $parsed_json[0]['data'];
+        }
     }
 
     $payload = [
@@ -691,6 +815,7 @@ function frontend_learning_data_scrape_url_handler()
         'data' => $final_data
     ];
 
+    $current_user_id = get_current_user_id();
     $post_data = array(
         'post_title'   => $title,
         'post_content' => wp_slash(json_encode($payload, JSON_UNESCAPED_UNICODE)),
@@ -717,7 +842,7 @@ function frontend_learning_data_scrape_url_handler()
         update_post_meta($post_id, 'learning_data_source', $url);
     }
 
-    wp_send_json_success(['post_id' => $post_id]);
+    wp_send_json_success(['post_id' => $post_id, 'log' => $llm_raw_text]);
 }
 
 // --- 新規：シードデータからの蒸留処理 ---
@@ -787,49 +912,33 @@ function frontend_learning_data_distill_from_seed_handler()
     $user_prompt .= "\n\n構造全体は { \"draft_thought\": \"...\", \"data\": <指定フォーマットに基づくデータ> } としてください。";
 
     $current_user_id = get_current_user_id();
-    $llm_response_text = '';
-
-    // 2. LLMプロバイダごとの通信
+    $llm_raw_text = '';
     try {
-        switch ($provider) {
-            case 'openai':
-                $api_key = get_user_meta($current_user_id, 'llm_openai_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_openai_model', true) ?: 'gpt-5.5';
-                if (!$api_key) throw new Exception("OpenAI API Keyが設定されていません。");
-                $llm_response_text = llm_api_call_openai($api_key, $model, $system_prompt, $user_prompt);
-                break;
-            case 'gemini':
-                $api_key = get_user_meta($current_user_id, 'llm_gemini_api_key', true);
-                $model = get_user_meta($current_user_id, 'llm_gemini_model', true) ?: 'gemini-3.1-pro-preview';
-                if (!$api_key) throw new Exception("Gemini API Keyが設定されていません。");
-                $llm_response_text = llm_api_call_gemini($api_key, $model, $system_prompt, $user_prompt);
-                break;
-            case 'ollama':
-                $url = get_user_meta($current_user_id, 'llm_ollama_url', true) ?: 'http://127.0.0.1:11434';
-                $model = get_user_meta($current_user_id, 'llm_ollama_model', true) ?: 'gemma4:12b-mlx';
-                $llm_response_text = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
-                break;
-            case 'custom':
-                $url = get_user_meta($current_user_id, 'llm_custom_url', true) ?: 'http://127.0.0.1:8080/v1';
-                $model = get_user_meta($current_user_id, 'llm_custom_model', true);
-                $llm_response_text = llm_api_call_custom($url, $model, $system_prompt, $user_prompt);
-                break;
-            default:
-                throw new Exception("不明なプロバイダです。");
-        }
+        $llm_raw_text = llm_api_call_raw($provider, $system_prompt, $user_prompt);
     } catch (Exception $e) {
         wp_send_json_error(['message' => $e->getMessage()]);
     }
 
-    if (empty($llm_response_text)) {
+    if (empty(trim($llm_raw_text))) {
         wp_send_json_error(['message' => 'LLMから有効な応答が返されませんでした。']);
     }
 
     // 3. パース済みデータ取得
-    $parsed_json = $llm_response_text; // Already parsed by llm_api_call_*
+    try {
+        $parsed_json = _parse_json_from_llm_response($llm_raw_text);
+    } catch (Exception $e) {
+        wp_send_json_error([
+            'message' => 'LLM応答のJSONパースに失敗しました: ' . $e->getMessage(),
+            'log' => $llm_raw_text
+        ]);
+    }
     $final_data = $parsed_json;
-    if (is_array($parsed_json) && isset($parsed_json['draft_thought']) && isset($parsed_json['data'])) {
-        $final_data = $parsed_json['data'];
+    if (is_array($parsed_json)) {
+        if (isset($parsed_json['data'])) {
+            $final_data = $parsed_json['data'];
+        } elseif (isset($parsed_json[0]) && is_array($parsed_json[0]) && isset($parsed_json[0]['data'])) {
+            $final_data = $parsed_json[0]['data'];
+        }
     }
 
     // 4. データ保存
@@ -861,7 +970,7 @@ function frontend_learning_data_distill_from_seed_handler()
         }
     }
 
-    wp_send_json_success(['post_id' => $post_id]);
+    wp_send_json_success(['post_id' => $post_id, 'log' => $llm_response_text]);
 }
 
 // --- 新規：LLM接続確認用API ---
@@ -973,7 +1082,14 @@ function frontend_learning_data_bot_crawl_handler() {
     $system_prompt .= "1. 出力は必ずJSON形式のみとしてください。\n";
     $system_prompt .= "2. 最終的な結果を生成する前に、必ず内部的な推論・自己評価を `\"draft_thought\"` というキーに出力し、その後に実際のデータを `\"data\"` に配置してください。\n";
 
-    $user_prompt = "【指定フォーマット】: {$target_format}\n";
+    $user_prompt = "【指定フォーマット】: {$target_format}
+";
+    if (empty(trim($speaker_names))) {
+        $speaker_names = "インタビュアーなど不特定の話し手";
+    }
+    $user_prompt .= "【話者・登場人物の設定】: {$speaker_names}
+※会話や対談形式の場合、誰が話したかを明示し、役割や知名度などのコンテキストを反映させてください。
+";
     if ($extra_prompt) {
         $user_prompt .= "【追加の指示】: {$extra_prompt}\n";
     }

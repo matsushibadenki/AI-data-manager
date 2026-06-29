@@ -6,6 +6,24 @@
  * Template Name: Text Data Index
  */
 
+if (!function_exists('_fourier_get_render_value')) {
+    function _fourier_get_render_value($data, $key) {
+        if (isset($data[$key])) {
+            return is_string($data[$key]) ? $data[$key] : print_r($data[$key], true);
+        } elseif (isset($data[0]) && is_array($data[0]) && isset($data[0][$key])) {
+            $values = array_column($data, $key);
+            return implode("
+
+---
+
+", array_map(function($v) {
+                return is_string($v) ? $v : print_r($v, true);
+            }, $values));
+        }
+        return '';
+    }
+}
+
 // 認証状態の確認
 $is_authenticated = is_user_logged_in();
 
@@ -420,7 +438,7 @@ get_header();
                                     <td><?php echo esc_html($item['date']); ?></td>
                                     <td><?php echo esc_html($item['title']); ?></td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['text']) ? $item['data']['text'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'text')); ?></div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -453,13 +471,13 @@ get_header();
                                     <td><?php echo esc_html($item['date']); ?></td>
                                     <td><?php echo esc_html($item['title']); ?></td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['instruction']) ? $item['data']['instruction'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'instruction')); ?></div>
                                     </td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['input']) ? $item['data']['input'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'input')); ?></div>
                                     </td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['output']) ? $item['data']['output'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'output')); ?></div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -491,13 +509,17 @@ get_header();
                                     <td><?php echo esc_html($item['title']); ?></td>
                                     <td>
                                         <?php
-                                        if (isset($item['data']['messages']) && is_array($item['data']['messages'])) {
-                                            foreach ($item['data']['messages'] as $msg) {
+                                        $messages = isset($item['data']['messages']) ? $item['data']['messages'] : (is_array($item['data']) && isset($item['data'][0]['role']) ? $item['data'] : []);
+                                        if (!empty($messages) && is_array($messages)) {
+                                            foreach ($messages as $msg) {
                                                 echo '<div style="margin-bottom:0.5rem;">';
-                                                echo '<strong>' . esc_html($msg['role']) . ':</strong><br>';
-                                                echo nl2br(esc_html($msg['content']));
+                                                echo '<strong>' . esc_html(isset($msg['role']) ? $msg['role'] : '') . ':</strong><br>';
+                                                echo nl2br(esc_html(isset($msg['content']) ? $msg['content'] : ''));
                                                 echo '</div>';
                                             }
+                                        } else {
+                                            // 期待した構造でない場合のフォールバック（生のJSONを表示）
+                                            echo '<pre style="white-space: pre-wrap; font-size: 0.8rem; background: #f8f8f8; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">' . esc_html(json_encode($item['data'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) . '</pre>';
                                         }
                                         ?>
                                     </td>
@@ -531,13 +553,17 @@ get_header();
                                     <td><?php echo esc_html($item['title']); ?></td>
                                     <td>
                                         <?php
-                                        if (isset($item['data']['conversations']) && is_array($item['data']['conversations'])) {
-                                            foreach ($item['data']['conversations'] as $conv) {
+                                        $conversations = isset($item['data']['conversations']) ? $item['data']['conversations'] : (is_array($item['data']) && isset($item['data'][0]['from']) ? $item['data'] : []);
+                                        if (!empty($conversations) && is_array($conversations)) {
+                                            foreach ($conversations as $conv) {
                                                 echo '<div style="margin-bottom:0.5rem;">';
-                                                echo '<strong>' . esc_html($conv['from']) . ':</strong><br>';
-                                                echo nl2br(esc_html($conv['value']));
+                                                echo '<strong>' . esc_html(isset($conv['from']) ? $conv['from'] : '') . ':</strong><br>';
+                                                echo nl2br(esc_html(isset($conv['value']) ? $conv['value'] : ''));
                                                 echo '</div>';
                                             }
+                                        } else {
+                                            // 期待した構造でない場合のフォールバック（生のJSONを表示）
+                                            echo '<pre style="white-space: pre-wrap; font-size: 0.8rem; background: #f8f8f8; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">' . esc_html(json_encode($item['data'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) . '</pre>';
                                         }
                                         ?>
                                     </td>
@@ -572,13 +598,13 @@ get_header();
                                     <td><?php echo esc_html($item['date']); ?></td>
                                     <td><?php echo esc_html($item['title']); ?></td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['question']) ? $item['data']['question'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'question')); ?></div>
                                     </td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['thought']) ? $item['data']['thought'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'thought')); ?></div>
                                     </td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['answer']) ? $item['data']['answer'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'answer')); ?></div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -611,13 +637,13 @@ get_header();
                                     <td><?php echo esc_html($item['date']); ?></td>
                                     <td><?php echo esc_html($item['title']); ?></td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['prompt']) ? $item['data']['prompt'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'prompt')); ?></div>
                                     </td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['chosen']) ? $item['data']['chosen'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'chosen')); ?></div>
                                     </td>
                                     <td>
-                                        <div class="sheet-pre"><?php echo esc_html(isset($item['data']['rejected']) ? $item['data']['rejected'] : ''); ?></div>
+                                        <div class="sheet-pre"><?php echo esc_html(_fourier_get_render_value($item['data'], 'rejected')); ?></div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -652,13 +678,13 @@ get_header();
                                     <td><?php echo esc_html($item['title']); ?></td>
                                     <td><?php echo nl2br(esc_html(isset($item['data']['explanation']) ? $item['data']['explanation'] : '')); ?></td>
                                     <td>
-                                        <pre><?php echo esc_html(isset($item['data']['html']) ? $item['data']['html'] : ''); ?></pre>
+                                        <pre><?php echo esc_html(_fourier_get_render_value($item['data'], 'html')); ?></pre>
                                     </td>
                                     <td>
-                                        <pre><?php echo esc_html(isset($item['data']['css']) ? $item['data']['css'] : ''); ?></pre>
+                                        <pre><?php echo esc_html(_fourier_get_render_value($item['data'], 'css')); ?></pre>
                                     </td>
                                     <td>
-                                        <pre><?php echo esc_html(isset($item['data']['js']) ? $item['data']['js'] : ''); ?></pre>
+                                        <pre><?php echo esc_html(_fourier_get_render_value($item['data'], 'js')); ?></pre>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

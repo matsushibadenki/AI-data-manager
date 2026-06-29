@@ -443,6 +443,10 @@ button.btn-black span.material-symbols-outlined {
                             <input type="text" id="meta-source" class="upload-form-input" placeholder="<?php echo esc_attr__('URL or 出典名', 'fourier'); ?>" />
                         </div>
                         <div>
+                            <label for="meta-speakers"><?php echo esc_html__('話者名/登場人物', 'fourier'); ?></label>
+                            <input type="text" id="meta-speakers" class="upload-form-input" placeholder="<?php echo esc_attr__('例: ゲスト名, 司会者', 'fourier'); ?>" />
+                        </div>
+                        <div>
                             <label><?php echo esc_html__('タグ', 'fourier'); ?></label>
                             <div class="tag-input-wrapper" id="tag-input-wrapper">
                                 <input type="text" id="meta-tags-input" placeholder="<?php echo esc_attr__('Enterで追加', 'fourier'); ?>" />
@@ -678,6 +682,10 @@ button.btn-black span.material-symbols-outlined {
                                 <input type="text" id="edit-meta-source" class="upload-form-input" />
                             </div>
                             <div>
+                                <label for="edit-meta-speakers"><?php echo esc_html__('話者名/登場人物', 'fourier'); ?></label>
+                                <input type="text" id="edit-meta-speakers" class="upload-form-input" />
+                            </div>
+                            <div>
                                 <label for="edit-meta-tags"><?php echo esc_html__('タグ（カンマ区切り）', 'fourier'); ?></label>
                                 <input type="text" id="edit-meta-tags" class="upload-form-input" />
                             </div>
@@ -884,12 +892,14 @@ button.btn-black span.material-symbols-outlined {
             var metaQuality = document.getElementById('meta-quality');
             var metaSource = document.getElementById('meta-source');
             var metaTags = document.getElementById('meta-tags');
+            var metaSpeakers = document.getElementById('meta-speakers');
             if (metaLang && metaLang.value) formData.append('language', metaLang.value);
             if (metaCat && metaCat.value) formData.append('category', metaCat.value);
             if (metaDiff && metaDiff.value) formData.append('difficulty', metaDiff.value);
             if (metaQuality && metaQuality.value) formData.append('quality', metaQuality.value);
             if (metaSource && metaSource.value) formData.append('source', metaSource.value);
             if (metaTags && metaTags.value) formData.append('tags', metaTags.value);
+            if (metaSpeakers && metaSpeakers.value) formData.append('speakers', metaSpeakers.value);
 
             // 送信
             fetch(ajaxUrl, {
@@ -1130,6 +1140,7 @@ button.btn-black span.material-symbols-outlined {
                     document.getElementById('edit-meta-difficulty').value = d.meta.difficulty || '';
                     document.getElementById('edit-meta-source').value = d.meta.source || '';
                     document.getElementById('edit-meta-tags').value = d.meta.tags || '';
+                    document.getElementById('edit-meta-speakers').value = d.meta.speakers || '';
                     var q = parseInt(d.meta.quality) || 0;
                     document.getElementById('edit-meta-quality').value = q;
                     document.getElementById('edit-quality-stars').querySelectorAll('.star').forEach((s, i) => {
@@ -1138,26 +1149,37 @@ button.btn-black span.material-symbols-outlined {
                 }
 
                 // フィールド動的生成
+                function extractDataVal(obj, key) {
+                    if (obj && typeof obj[key] !== 'undefined') {
+                        return typeof obj[key] === 'string' ? obj[key] : JSON.stringify(obj[key]);
+                    }
+                    if (Array.isArray(obj) && obj.length > 0 && typeof obj[0][key] !== 'undefined') {
+                        return obj.map(item => {
+                            return typeof item[key] === 'string' ? item[key] : JSON.stringify(item[key]);
+                        }).join('\n\n---\n\n');
+                    }
+                    return '';
+                }
                 var container = document.getElementById('edit-fields-container');
                 container.innerHTML = '';
                 var data = d.data || {};
                 var format = d.format;
 
                 if (format === 'plain') {
-                    container.innerHTML = '<div class="upload-form-group"><label>テキスト本文:</label><textarea id="edit-field-text" class="upload-form-input" rows="8">' + escHtml(data.text || '') + '</textarea></div>';
+                    container.innerHTML = '<div class="upload-form-group"><label>テキスト本文:</label><textarea id="edit-field-text" class="upload-form-input" rows="8">' + escHtml(extractDataVal(data, 'text')) + '</textarea></div>';
                 } else if (format === 'instruction') {
-                    container.innerHTML = '<div class="upload-form-group"><label>Instruction:</label><textarea id="edit-field-instruction" class="upload-form-input" rows="3">' + escHtml(data.instruction || '') + '</textarea></div>'
-                        + '<div class="upload-form-group"><label>Input:</label><textarea id="edit-field-input" class="upload-form-input" rows="3">' + escHtml(data.input || '') + '</textarea></div>'
-                        + '<div class="upload-form-group"><label>Output:</label><textarea id="edit-field-output" class="upload-form-input" rows="5">' + escHtml(data.output || '') + '</textarea></div>';
+                    container.innerHTML = '<div class="upload-form-group"><label>Instruction:</label><textarea id="edit-field-instruction" class="upload-form-input" rows="3">' + escHtml(extractDataVal(data, 'instruction')) + '</textarea></div>'
+                        + '<div class="upload-form-group"><label>Input:</label><textarea id="edit-field-input" class="upload-form-input" rows="3">' + escHtml(extractDataVal(data, 'input')) + '</textarea></div>'
+                        + '<div class="upload-form-group"><label>Output:</label><textarea id="edit-field-output" class="upload-form-input" rows="5">' + escHtml(extractDataVal(data, 'output')) + '</textarea></div>';
                 } else if (format === 'cot') {
-                    container.innerHTML = '<div class="upload-form-group"><label>Question:</label><textarea id="edit-field-question" class="upload-form-input" rows="3">' + escHtml(data.question || '') + '</textarea></div>'
-                        + '<div class="upload-form-group"><label>Thought:</label><textarea id="edit-field-thought" class="upload-form-input" rows="6">' + escHtml(data.thought || '') + '</textarea></div>'
-                        + '<div class="upload-form-group"><label>Answer:</label><textarea id="edit-field-answer" class="upload-form-input" rows="3">' + escHtml(data.answer || '') + '</textarea></div>';
+                    container.innerHTML = '<div class="upload-form-group"><label>Question:</label><textarea id="edit-field-question" class="upload-form-input" rows="3">' + escHtml(extractDataVal(data, 'question')) + '</textarea></div>'
+                        + '<div class="upload-form-group"><label>Thought:</label><textarea id="edit-field-thought" class="upload-form-input" rows="6">' + escHtml(extractDataVal(data, 'thought')) + '</textarea></div>'
+                        + '<div class="upload-form-group"><label>Answer:</label><textarea id="edit-field-answer" class="upload-form-input" rows="3">' + escHtml(extractDataVal(data, 'answer')) + '</textarea></div>';
                 } else if (format === 'frontend_code') {
-                    container.innerHTML = '<div class="upload-form-group"><label>説明:</label><textarea id="edit-field-explanation" class="upload-form-input" rows="2">' + escHtml(data.explanation || '') + '</textarea></div>'
-                        + '<div class="upload-form-group"><label>HTML:</label><textarea id="edit-field-html" class="upload-form-input" rows="4" style="font-family:monospace;">' + escHtml(data.html || '') + '</textarea></div>'
-                        + '<div class="upload-form-group"><label>CSS:</label><textarea id="edit-field-css" class="upload-form-input" rows="4" style="font-family:monospace;">' + escHtml(data.css || '') + '</textarea></div>'
-                        + '<div class="upload-form-group"><label>JavaScript:</label><textarea id="edit-field-js" class="upload-form-input" rows="4" style="font-family:monospace;">' + escHtml(data.js || '') + '</textarea></div>';
+                    container.innerHTML = '<div class="upload-form-group"><label>説明:</label><textarea id="edit-field-explanation" class="upload-form-input" rows="2">' + escHtml(extractDataVal(data, 'explanation')) + '</textarea></div>'
+                        + '<div class="upload-form-group"><label>HTML:</label><textarea id="edit-field-html" class="upload-form-input" rows="4" style="font-family:monospace;">' + escHtml(extractDataVal(data, 'html')) + '</textarea></div>'
+                        + '<div class="upload-form-group"><label>CSS:</label><textarea id="edit-field-css" class="upload-form-input" rows="4" style="font-family:monospace;">' + escHtml(extractDataVal(data, 'css')) + '</textarea></div>'
+                        + '<div class="upload-form-group"><label>JavaScript:</label><textarea id="edit-field-js" class="upload-form-input" rows="4" style="font-family:monospace;">' + escHtml(extractDataVal(data, 'js')) + '</textarea></div>';
                 } else {
                     // chatml, sharegpt, structured 等はJSON編集
                     container.innerHTML = '<div class="upload-form-group"><label>JSONデータ:</label><textarea id="edit-field-json" class="upload-form-input" rows="10" style="font-family:monospace;">' + escHtml(JSON.stringify(data, null, 2)) + '</textarea></div>';
@@ -1202,6 +1224,7 @@ button.btn-black span.material-symbols-outlined {
             fd.append('quality', document.getElementById('edit-meta-quality').value);
             fd.append('source', document.getElementById('edit-meta-source').value);
             fd.append('tags', document.getElementById('edit-meta-tags').value);
+            fd.append('speakers', document.getElementById('edit-meta-speakers').value);
 
             fetch(ajaxUrl, { method: 'POST', body: fd })
             .then(r => r.json())

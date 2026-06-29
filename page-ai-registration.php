@@ -474,6 +474,10 @@ button.btn-black span.material-symbols-outlined {
                         </select>
                     </div>
                     <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="scrape-speaker-names"><?php echo esc_html__('話者名 (対談・インタビュー等の場合):', 'fourier'); ?></label>
+                        <input type="text" id="scrape-speaker-names" class="upload-form-input" placeholder="例: ゲスト名, インタビュアー (空欄の場合は不特定の話し手)" />
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
                         <label for="scrape-prompt"><?php echo esc_html__('追加の指示（任意）:', 'fourier'); ?></label>
                         <textarea id="scrape-prompt" class="upload-form-input" rows="3" placeholder="例: 内容を小学生にもわかるように易しく解説するQAセットを作成して。"></textarea>
                     </div>
@@ -520,6 +524,10 @@ button.btn-black span.material-symbols-outlined {
                         </select>
                     </div>
                     <div class="upload-form-group" style="margin-top: 1rem;">
+                        <label for="distill-speaker-names"><?php echo esc_html__('話者名 (対談・インタビュー等の場合):', 'fourier'); ?></label>
+                        <input type="text" id="distill-speaker-names" class="upload-form-input" placeholder="例: ゲスト名, インタビュアー (空欄の場合は不特定の話し手)" />
+                    </div>
+                    <div class="upload-form-group" style="margin-top: 1rem;">
                         <label for="distill-prompt"><?php echo esc_html__('追加の指示（任意）:', 'fourier'); ?></label>
                         <textarea id="distill-prompt" class="upload-form-input" rows="2" placeholder="例: 出力は小学生でもわかる言葉遣いにしてください。"></textarea>
                     </div>
@@ -532,18 +540,57 @@ button.btn-black span.material-symbols-outlined {
 
                 <div id="status-message" class="status-msg"></div>
 
-                <input type="hidden" id="edit-post-id" value="" />
+    <!-- ログ表示トグル -->
+    <div class="log-toggle" style="margin-top: 1rem;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="log-toggle-checkbox" style="margin-right: 0.5rem;" checked>
+            <span>AIとのやり取りのログを表示する</span>
+        </label>
+    </div>
+    <!-- ログ表示領域 -->
+    <pre id="ai-log" class="ai-log" style="background:#f5f5f5; padding:1rem; margin-top:0.5rem; overflow:auto; max-height:300px; display:none;"></pre>
+
+    <input type="hidden" id="edit-post-id" value="" />
 
             </div>
-
-
 
             <?php endif; ?>
     </div>
 </main>
 
 <script>
+    function handleAjaxSuccess(response) {
+        if (response.success) {
+            document.getElementById('status-message').textContent = '登録が完了しました。投稿ID: ' + response.data.post_id;
+            // ログを表示
+            const logContainer = document.getElementById('ai-log');
+            if (logContainer) {
+                logContainer.textContent = response.data.log || '';
+                const toggle = document.getElementById('log-toggle-checkbox');
+                if (toggle && toggle.checked) {
+                    logContainer.style.display = 'block';
+                } else {
+                    logContainer.style.display = 'none';
+                }
+            }
+        } else {
+            document.getElementById('status-message').textContent = 'エラー: ' + (response.data.message || '不明なエラー');
+        }
+    }
+    
     document.addEventListener('DOMContentLoaded', function() {
+        // ログ表示トグルのリスナー
+        const logToggle = document.getElementById('log-toggle-checkbox');
+        if (logToggle) {
+            logToggle.addEventListener('change', function(){
+                const logContainer = document.getElementById('ai-log');
+                if (this.checked) {
+                    logContainer.style.display = 'block';
+                } else {
+                    logContainer.style.display = 'none';
+                }
+            });
+        }
 
         var ajaxUrl = "<?php echo esc_url(admin_url('admin-ajax.php')); ?>";
         var uploadNonce = "<?php echo wp_create_nonce('learning_data_action'); ?>";
@@ -719,12 +766,10 @@ button.btn-black span.material-symbols-outlined {
                 this.disabled = false;
                 this.style.opacity = '1';
                 
+                handleAjaxSuccess(response);
                 if (response.success) {
-                    showStatus('蒸留データの自動登録が完了しました！(ID: ' + response.data.post_id + ')', false);
                     document.getElementById('distill-seed').value = '';
                     document.getElementById('data-title').value = '';
-                } else {
-                    showStatus(response.data.message || '処理に失敗しました。', true);
                 }
             })
             .catch(error => {
