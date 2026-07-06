@@ -273,8 +273,9 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             <div class="learning-tabs">
                 <button type="button" class="learning-tab active" data-target="tab-import">インポート</button>
                 <button type="button" class="learning-tab" data-target="tab-export">エクスポート</button>
-                <button type="button" class="learning-tab" data-target="tab-external">外部オープンデータセット連携</button>
+                <button type="button" class="learning-tab" data-target="tab-huggingface">Hugging Face</button>
                 <button type="button" class="learning-tab" data-target="tab-wikipedia">Wikipediaダンプ一括処理</button>
+                <button type="button" class="learning-tab" data-target="tab-commons">Wikimedia Commons一括処理</button>
             </div>
 
             <!-- インポートセクション -->
@@ -440,8 +441,8 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 </div>
             </section>
 
-            <!-- オープンデータセット連携セクション -->
-            <section id="tab-external" class="panel-section learning-tab-content">
+            <!-- Hugging Faceセクション -->
+            <section id="tab-huggingface" class="panel-section learning-tab-content">
                 <h3 class="panel-title">
                     <span class="material-symbols-outlined">public</span>
                     <?php echo esc_html__('外部オープンデータセット連携 (Hugging Face)', 'fourier'); ?>
@@ -619,6 +620,58 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                             </tr>
                         </thead>
                         <tbody id="wiki-files-tbody">
+                            <tr><td colspan="3" style="text-align:center; color:#999;">ファイルがありません</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Commonsダンプセクション -->
+            <section id="tab-commons" class="panel-section learning-tab-content">
+                <h3 class="panel-title">
+                    <span class="material-symbols-outlined">image</span>
+                    Wikimedia Commons ダンプ一括処理
+                </h3>
+                
+                <div style="background: var(--bg-body, #fafafa); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-subtle, #eee); margin-bottom: 2rem;">
+                    <p style="font-size: 0.9rem; color: #555; margin-bottom: 1rem;">
+                        Wikimedia CommonsのJSONダンプ（<a href="https://dumps.wikimedia.org/other/wikibase/commonswiki/" target="_blank">dumps.wikimedia.org</a>）のURLを指定して、画像URLとキャプションを抽出します。<br>
+                        数十GB以上のファイルの処理には非常に時間がかかります。完了後、生成されたJSONファイルを個別にインポートしてください。
+                    </p>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display:block; font-weight:bold; margin-bottom:0.5rem; font-size:0.9rem;">ダンプファイルのURL:</label>
+                        <input type="text" id="commons-dump-url" class="auth-input" placeholder="例: https://dumps.wikimedia.org/other/wikibase/commonswiki/latest-mediainfo.json.gz" style="width:100%; margin-bottom:0.5rem;" value="https://dumps.wikimedia.org/other/wikibase/commonswiki/latest-mediainfo.json.gz">
+                    </div>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display:block; font-weight:bold; margin-bottom:0.5rem; font-size:0.9rem;">1ファイルあたりのデータ数:</label>
+                        <input type="number" id="commons-dump-chunk" class="auth-input" value="10000" min="1000" max="100000" style="width:200px;">
+                    </div>
+                    
+                    <button type="button" id="btn-commons-start" class="btn-base btn-primary">バックグラウンド処理を開始</button>
+                    
+                    <div id="commons-progress-container" style="display:none; margin-top: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #ddd; border-radius: 4px;">
+                        <div style="font-weight:bold; margin-bottom: 0.5rem;">ステータス: <span id="commons-status-text">待機中</span></div>
+                        <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.5rem;" id="commons-message-text"></div>
+                        <div class="progress-bar"><div class="progress-fill" id="commons-progress-fill" style="width:0%"></div></div>
+                    </div>
+                </div>
+                
+                <h4 style="margin-bottom: 1rem;">生成されたデータセット一覧</h4>
+                <div style="text-align:right; margin-bottom:1rem;">
+                    <button type="button" id="btn-commons-refresh" class="btn-base btn-secondary"><span class="material-symbols-outlined" style="font-size:1rem;">refresh</span> 更新</button>
+                </div>
+                <div class="preview-table-wrapper" style="display:block;">
+                    <table class="data-sheet">
+                        <thead>
+                            <tr>
+                                <th>ファイル名</th>
+                                <th>サイズ</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="commons-files-tbody">
                             <tr><td colspan="3" style="text-align:center; color:#999;">ファイルがありません</td></tr>
                         </tbody>
                     </table>
@@ -1408,8 +1461,109 @@ $upload_nonce = wp_create_nonce('learning_data_action');
 
         document.getElementById('btn-wiki-refresh')?.addEventListener('click', loadWikiFiles);
         
+        // Commons Dump JS
+        let commonsPollInterval = null;
+        
+        function pollCommonsStatus() {
+            const fd = new FormData();
+            fd.append('action', 'check_commons_dump_status');
+            fd.append('nonce', uploadNonce);
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success && res.data) {
+                        const d = res.data;
+                        document.getElementById('commons-progress-container').style.display = 'block';
+                        document.getElementById('commons-status-text').textContent = d.state === 'processing' || d.state === 'running' ? '処理中' : (d.state === 'downloading' ? 'ダウンロード中' : d.state);
+                        document.getElementById('commons-message-text').textContent = d.message || '';
+                        
+                        if(d.state === 'completed' || d.state === 'error') {
+                            clearInterval(commonsPollInterval);
+                            commonsPollInterval = null;
+                            document.getElementById('btn-commons-start').disabled = false;
+                            loadCommonsFiles();
+                        }
+                    }
+                });
+        }
+        
+        function loadCommonsFiles() {
+            const fd = new FormData();
+            fd.append('action', 'list_commons_dump_files');
+            fd.append('nonce', uploadNonce);
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success && res.data.files) {
+                        const tbody = document.getElementById('commons-files-tbody');
+                        if(res.data.files.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#999;">ファイルがありません</td></tr>';
+                            return;
+                        }
+                        
+                        let html = '';
+                        res.data.files.forEach(f => {
+                            const sizeMb = (f.size / 1024 / 1024).toFixed(2);
+                            html += `
+                                <tr>
+                                    <td>${escHtml(f.name)}</td>
+                                    <td>${sizeMb} MB</td>
+                                    <td>
+                                        <button type="button" class="btn-base btn-primary" onclick="importLocalJson('${escHtml(f.path)}', 'structured')" style="padding:0.25rem 0.5rem; font-size:0.8rem;">インポート</button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        tbody.innerHTML = html;
+                    }
+                });
+        }
+
+        document.getElementById('btn-commons-start')?.addEventListener('click', function() {
+            const url = document.getElementById('commons-dump-url').value.trim();
+            const chunkSize = document.getElementById('commons-dump-chunk').value;
+            
+            if(!url) {
+                alert('URLを入力してください。');
+                return;
+            }
+            
+            this.disabled = true;
+            document.getElementById('commons-progress-container').style.display = 'block';
+            document.getElementById('commons-status-text').textContent = '起動中...';
+            document.getElementById('commons-message-text').textContent = '';
+            
+            const fd = new FormData();
+            fd.append('action', 'start_commons_dump_process');
+            fd.append('nonce', uploadNonce);
+            fd.append('url', url);
+            fd.append('chunk_size', chunkSize);
+            
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success) {
+                        if(commonsPollInterval) clearInterval(commonsPollInterval);
+                        commonsPollInterval = setInterval(pollCommonsStatus, 3000);
+                    } else {
+                        alert(res.data.message || 'エラーが発生しました');
+                        this.disabled = false;
+                    }
+                }).catch(() => {
+                    alert('通信エラー');
+                    this.disabled = false;
+                });
+        });
+
+        document.getElementById('btn-commons-refresh')?.addEventListener('click', loadCommonsFiles);
+        
         // Initial load
-        loadWikiFiles();
+        if (document.getElementById('btn-wiki-start')) {
+            loadWikiFiles();
+        }
+        if (document.getElementById('btn-commons-start')) {
+            loadCommonsFiles();
+        }
         
         function escHtml(str) {
             const div = document.createElement('div');
