@@ -427,6 +427,32 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMsg.textContent = `クロール完了 (成功: ${successCount}, エラー: ${errorCount})`;
         statusMsg.className = successCount > 0 ? 'status-msg success' : 'status-msg error';
         statusMsg.style.display = 'block';
+
+        if (successCount > 0) {
+            const originalStartText = btnStart.innerHTML;
+            btnStart.innerHTML = '<span class="material-symbols-outlined">check_circle</span> 完了';
+            btnStart.style.backgroundColor = '#10B981';
+            btnStart.style.borderColor = '#10B981';
+            
+            let originalArchiveText = '';
+            if(btnStartArchive) {
+                originalArchiveText = btnStartArchive.innerHTML;
+                btnStartArchive.innerHTML = '<span class="material-symbols-outlined">check_circle</span> 完了';
+                btnStartArchive.style.backgroundColor = '#10B981';
+                btnStartArchive.style.borderColor = '#10B981';
+            }
+            
+            setTimeout(() => {
+                btnStart.innerHTML = originalStartText;
+                btnStart.style.backgroundColor = '';
+                btnStart.style.borderColor = '';
+                if(btnStartArchive) {
+                    btnStartArchive.innerHTML = originalArchiveText;
+                    btnStartArchive.style.backgroundColor = '';
+                    btnStartArchive.style.borderColor = '';
+                }
+            }, 3000);
+        }
     }
 
     btnStart.addEventListener('click', () => {

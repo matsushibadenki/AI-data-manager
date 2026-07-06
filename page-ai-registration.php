@@ -695,9 +695,18 @@ button.btn-black span.material-symbols-outlined {
                 this.style.opacity = '1';
                 
                 if (response.success) {
+                    const originalText = this.innerHTML;
+                    this.innerHTML = '<span class="material-symbols-outlined">check_circle</span> 登録完了';
+                    this.style.backgroundColor = '#10B981';
+                    this.style.borderColor = '#10B981';
                     showStatus('データの自動取得と登録が完了しました！(ID: ' + response.data.post_id + ')', false);
                     document.getElementById('scrape-url').value = '';
                     document.getElementById('data-title').value = '';
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.style.backgroundColor = 'var(--accent)';
+                        this.style.borderColor = 'var(--accent)';
+                    }, 3000);
                 } else {
                     showStatus(response.data.message || '処理に失敗しました。', true);
                 }
@@ -768,8 +777,17 @@ button.btn-black span.material-symbols-outlined {
                 
                 handleAjaxSuccess(response);
                 if (response.success) {
+                    const originalText = this.innerHTML;
+                    this.innerHTML = '<span class="material-symbols-outlined">check_circle</span> 登録完了';
+                    this.style.backgroundColor = '#10B981';
+                    this.style.borderColor = '#10B981';
                     document.getElementById('distill-seed').value = '';
                     document.getElementById('data-title').value = '';
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.style.backgroundColor = 'var(--accent)';
+                        this.style.borderColor = 'var(--accent)';
+                    }, 3000);
                 }
             })
             .catch(error => {

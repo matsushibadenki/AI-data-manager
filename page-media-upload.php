@@ -420,9 +420,13 @@ get_header();
                         completedCount++;
                         if (completedCount === totalFiles) {
                             registerBtn.textContent = '完了しました';
+                            registerBtn.style.backgroundColor = '#10B981';
+                            registerBtn.style.color = '#fff';
                             setTimeout(() => {
                                 registerBtn.disabled = false;
                                 registerBtn.textContent = 'データと画像を登録';
+                                registerBtn.style.backgroundColor = '';
+                                registerBtn.style.color = '';
                                 if (pendingFilesList.length === 0) {
                                     previewContainer.style.display = 'none';
                                 }
@@ -626,6 +630,12 @@ get_header();
 
             xhr.addEventListener('error', function() {
                 showError('通信エラーが発生しました。');
+            });
+
+            xhr.addEventListener('loadend', function() {
+                if (typeof onComplete === 'function') {
+                    onComplete();
+                }
             });
 
             function showError(message) {

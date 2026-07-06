@@ -162,6 +162,7 @@ function frontend_learning_data_distill_handler()
     $system_prompt .= "【重要要件】\n";
     $system_prompt .= "1. 出力は必ずJSON形式のみとしてください。\n";
     $system_prompt .= "2. 最終的な結果を生成する前に、必ず内部的な推論・自己評価を `\"draft_thought\"` というキーに出力し、その後に実際のデータを `\"data\"` キー内に配列として配置してください。\n";
+    $system_prompt .= "3. ！！！警告！！！ 値の文字列内にダブルクォーテーション(\")を含める場合は必ずバックスラッシュでエスケープ(\\\")してください。また、改行は必ず \\n を使用し、生の改行は絶対に入れないでください。\n";
 
     $user_prompt = "元のフォーマット: {$format}\n元のデータ:\n{$data_to_distill}\n\n";
 
@@ -174,7 +175,7 @@ function frontend_learning_data_distill_handler()
         $user_prompt .= "【指示】このデータから「Instruction（指示 / 質問）」と「Output（回答）」のペアを可能な限り抽出し、Instruction形式のデータに変換してください。各要素は `instruction`, `input` (任意), `output` というキーを持つJSONオブジェクトとしてください。";
     } elseif ($strategy === 'cot') {
         $target_format = 'cot';
-        $user_prompt .= "【指示】この回答データが導かれるまでの「論理的な思考プロセス（Chain-of-Thought）」を詳細に考え、それをデータに付加してください。出力の構造は `instruction`, `thought_process` (思考ステップ), `output` (最終回答) というキーを持つJSONオブジェクトとしてください。";
+        $user_prompt .= "【指示】この回答データが導かれるまでの「論理的な思考プロセス（Chain-of-Thought）」を詳細に考え、それをデータに付加してください。出力の構造は必ず `question`, `thought`, `answer` というキーを持つJSONオブジェクトとしてください。キー名は絶対に変更しないでください。";
     }
 
     if ($extra_prompt) {
@@ -223,8 +224,17 @@ function frontend_learning_data_distill_handler()
 
     $parsed_json = $llm_response_text; // Already parsed by llm_api_call_*
     $distilled_results = $parsed_json;
-    if (is_array($parsed_json) && isset($parsed_json['draft_thought']) && isset($parsed_json['data'])) {
-        $distilled_results = $parsed_json['data'];
+    if (is_array($parsed_json)) {
+        if (isset($parsed_json['data'])) {
+            $distilled_results = $parsed_json['data'];
+        } elseif (isset($parsed_json[0]) && is_array($parsed_json[0]) && isset($parsed_json[0]['data'])) {
+            $distilled_results = $parsed_json[0]['data'];
+        }
+    }
+
+    // 単一のオブジェクト（連想配列）の場合は配列にラップする
+    if (is_array($distilled_results) && !wp_is_numeric_array($distilled_results)) {
+        $distilled_results = [$distilled_results];
     }
 
     if (!is_array($distilled_results) || count($distilled_results) === 0) {
@@ -271,54 +281,81 @@ function frontend_learning_data_distill_handler()
 // APIリクエストラッパー関数群
 // ------------------------------------------------------------------
 
-function _parse_json_from_llm_response($text)
-{
-    // マークダウンのコードブロック(```json ... ```)を取り除く
-    $text = preg_replace('/^```json\s*/m', '', $text);
-    $text = preg_replace('/```$/m', '', $text);
-    $text = trim($text);
-
-    // 最初と最後が [ ] または { } でない場合はエラーにしたいが、まずはパースしてみる
-    $decoded = json_decode($text, true);
-    if (json_last_error() === JSON_ERROR_NONE) {
-        if (!wp_is_numeric_array($decoded)) {
-            if (isset($decoded['draft_thought']) || isset($decoded['data']) || isset($decoded['variations'])) {
-                return $decoded;
-            }
-            return [$decoded]; // それ以外は配列に強制
-        }
-        return $decoded;
-    }
-
-    // パース失敗時、オブジェクトの開始部分を強引に探す
-    $start_obj = strpos($text, '{');
-    $end_obj = strrpos($text, '}');
-    if ($start_obj !== false && $end_obj !== false && $start_obj < $end_obj) {
-        $substr_obj = substr($text, $start_obj, $end_obj - $start_obj + 1);
-        $decoded_obj = json_decode($substr_obj, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
-            if (!wp_is_numeric_array($decoded_obj)) {
-                if (isset($decoded_obj['draft_thought']) || isset($decoded_obj['data']) || isset($decoded_obj['variations'])) {
-                    return $decoded_obj;
-                }
-                return [$decoded_obj];
-            }
-            return $decoded_obj;
-        }
-    }
-
-    // オブジェクトが見つからない場合、配列の開始部分を強引に探す
-    $start = strpos($text, '[');
-    $end = strrpos($text, ']');
-    if ($start !== false && $end !== false && $start < $end) {
-        $substr = substr($text, $start, $end - $start + 1);
-        $decoded = json_decode($substr, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
+function _format_parsed_json($decoded) {
+    if (!wp_is_numeric_array($decoded)) {
+        if (isset($decoded['draft_thought']) || isset($decoded['data']) || isset($decoded['variations'])) {
             return $decoded;
         }
+        return [$decoded]; // それ以外は配列に強制
+    }
+    return $decoded;
+}
+
+function _try_parse_json_with_sliding_window($text) {
+    // トレイリングカンマの削除
+    $text = preg_replace('/,\s*([\]}])/m', '$1', $text);
+
+    // 無効なバックスラッシュエスケープを修正 (例: \alpha -> \\alpha)
+    // JSONで許可されているエスケープは \", \\, \/, \b, \f, \n, \r, \t, \uXXXX のみ
+    $text = preg_replace('/\\\\([^"\\\\\/bfnrtu])/', '\\\\\\\\$1', $text);
+
+    $decoded = json_decode($text, true);
+    if (json_last_error() === JSON_ERROR_NONE) return _format_parsed_json($decoded);
+
+    $offset = 0;
+    while (($start = strpos($text, '[', $offset)) !== false) {
+        $end = strrpos($text, ']');
+        if ($end !== false && $start < $end) {
+            $substr = substr($text, $start, $end - $start + 1);
+            $decoded = json_decode($substr, true);
+            if (json_last_error() === JSON_ERROR_NONE) return _format_parsed_json($decoded);
+        }
+        $offset = $start + 1;
     }
 
-    throw new Exception("LLMの応答からJSONをパースできませんでした。");
+    $offset = 0;
+    while (($start = strpos($text, '{', $offset)) !== false) {
+        $end = strrpos($text, '}');
+        if ($end !== false && $start < $end) {
+            $substr = substr($text, $start, $end - $start + 1);
+            $decoded = json_decode($substr, true);
+            if (json_last_error() === JSON_ERROR_NONE) return _format_parsed_json($decoded);
+        }
+        $offset = $start + 1;
+    }
+    return null;
+}
+
+function _parse_json_from_llm_response($text)
+{
+    // CoT (思考過程)の <think> ... </think> タグなどを除去
+    $text = preg_replace('/<think>.*?<\/think>/is', '', $text);
+    $text = preg_replace('/<reasoning>.*?<\/reasoning>/is', '', $text);
+    
+    // 単独行のマークダウンタグを安全に除去
+    $lines = explode("\n", $text);
+    $filtered_lines = [];
+    foreach ($lines as $line) {
+        $t = trim($line);
+        if ($t === '```json' || $t === '```') continue;
+        $filtered_lines[] = $line;
+    }
+    $text = trim(implode("\n", $filtered_lines));
+
+    // 1回目: そのままスライディングウィンドウでパース試行
+    $res = _try_parse_json_with_sliding_window($text);
+    if ($res !== null) return $res;
+
+    // 2回目: 文字列内に生のコントロール文字（改行、タブなど）が含まれているための Syntax error 対策
+    // JSON内の生の改行等は許可されないため、全てスペースに置換してから再度パースを試みる
+    $clean_text = preg_replace('/[\x00-\x1F\x7F]/', ' ', $text);
+    $res = _try_parse_json_with_sliding_window($clean_text);
+    if ($res !== null) return $res;
+
+    $len = mb_strlen($text);
+    $raw_start = mb_substr($text, 0, 200);
+    $raw_end = $len > 200 ? mb_substr($text, -200) : '';
+    throw new Exception("LLMの応答からJSONをパースできませんでした。理由: " . json_last_error_msg() . "\n出力先頭: " . $raw_start . "\n出力末尾: " . $raw_end);
 }
 
 function llm_api_call_openai($api_key, $model, $system, $user)
@@ -409,8 +446,10 @@ function llm_api_call_ollama($base_url, $model, $system, $user)
             ['role' => 'system', 'content' => $system],
             ['role' => 'user', 'content' => $user]
         ],
-        'format' => 'json',
-        'stream' => false
+        'stream' => false,
+        'options' => [
+            'num_predict' => 8192
+        ]
     ];
 
     $response = wp_remote_post($url, [
@@ -562,7 +601,10 @@ function llm_api_call_raw($provider, $system_prompt, $user_prompt)
                     ['role' => 'system', 'content' => $system_prompt],
                     ['role' => 'user', 'content' => $user_prompt]
                 ],
-                'stream' => false
+                'stream' => false,
+                'options' => [
+                    'num_predict' => 8192
+                ]
                 // 注意: 'format' => 'json' を意図的に外す。
                 // ローカルLLMがJSON構造を壊す原因になるため、プロンプトでJSON出力を指示する。
             ];
@@ -697,6 +739,14 @@ function frontend_learning_data_scrape_url_handler()
                     $is_custom_scraped = true;
                 }
             }
+
+            // GitHub特有の自動最適化
+            if ($is_custom_scraped) {
+                // 明示的にユーザーが他のフォーマットを指定していなければ instruction にする
+                // （現状ではフロントから送られるデフォルトが instruction と推定されるが強制する）
+                $target_format = 'instruction';
+                $extra_prompt .= "【GitHub最適化指示】: 抽出されたコードやREADMEの内容をもとに、このリポジトリ・ファイルの役割や使い方を解説する「質問（instruction）」と「回答（output）」のペアを作成してください。単なるコードのコピペではなく、学習用の技術解説データとして最適化してください。";
+            }
         }
     } elseif (strpos($host, 'codepen.io') !== false) {
         $path_parts = explode('/', trim($path, '/'));
@@ -712,6 +762,10 @@ function frontend_learning_data_scrape_url_handler()
             if (!is_wp_error($css_res)) $text .= "--- CSS ---\n" . wp_remote_retrieve_body($css_res) . "\n\n";
             if (!is_wp_error($js_res)) $text .= "--- JS ---\n" . wp_remote_retrieve_body($js_res) . "\n\n";
             $is_custom_scraped = true;
+
+            // CodePen特有の自動最適化
+            $target_format = 'frontend_code';
+            $extra_prompt .= "【CodePen最適化指示】: 提供されたHTML, CSS, JSのコードスニペットを、それぞれ `html`, `css`, `js` のキーに格納してください。解説や説明は一切不要です。コードのみを抽出して登録してください。";
         }
     } elseif (strpos($host, 'reddit.com') !== false) {
         if (strpos($path, '/comments/') !== false) {
@@ -766,8 +820,36 @@ function frontend_learning_data_scrape_url_handler()
     $system_prompt .= "【重要要件】\n";
     $system_prompt .= "1. 出力は必ずJSON形式のみとしてください。\n";
     $system_prompt .= "2. 最終的な結果を生成する前に、必ず内部的な推論・自己評価を `\"draft_thought\"` というキーに出力し、その後に実際のデータを配置してください。\n";
-    $system_prompt .= "（例: { \"draft_thought\": \"抽出したテキストから...という論理を組み立てる\", \"data\": [ { \"instruction\": \"...\", ... } ] } ）";
+    $system_prompt .= "（例: { \"draft_thought\": \"抽出したテキストから...という論理を組み立てる\", \"data\": [ { \"instruction\": \"...\", ... } ] } ）\n";
+    $system_prompt .= "3. ！！！警告！！！ 値の文字列内にダブルクォーテーション(\")を含める場合は必ずバックスラッシュでエスケープ(\\\")してください。また、生の改行やタブは使用せず、必ず \\n や \\t にエスケープしてください。\n";
     $user_prompt = "【指定フォーマット】: {$target_format}\n";
+    
+    // フォーマットごとの必須キーを明示する
+    $format_keys = "";
+    switch ($target_format) {
+        case 'instruction':
+            $format_keys = "`instruction`, `input` (任意), `output`";
+            break;
+        case 'cot':
+            $format_keys = "`question`, `thought`, `answer`";
+            break;
+        case 'dpo':
+            $format_keys = "`prompt`, `chosen`, `rejected`";
+            break;
+        case 'chatml':
+        case 'sharegpt':
+            $format_keys = "`conversations` (配列。各要素は `from` と `value` を持つ)";
+            break;
+        case 'frontend_code':
+            $format_keys = "`html`, `css`, `js`";
+            break;
+        case 'plain':
+            $format_keys = "`text`";
+            break;
+    }
+    if ($format_keys) {
+        $user_prompt .= "【必須のJSONキー】: このフォーマットの配列要素は必ず {$format_keys} というキー名を持たせてください。キー名（question等）は絶対に変更しないでください。\n";
+    }
     if (empty(trim($speaker_names))) {
         $speaker_names = "インタビュアーなど不特定の話し手";
     }
@@ -808,6 +890,11 @@ function frontend_learning_data_scrape_url_handler()
         } elseif (isset($parsed_json[0]) && is_array($parsed_json[0]) && isset($parsed_json[0]['data'])) {
             $final_data = $parsed_json[0]['data'];
         }
+    }
+
+    // 単一のオブジェクト（連想配列）の場合は配列にラップする
+    if (is_array($final_data) && !wp_is_numeric_array($final_data)) {
+        $final_data = [$final_data];
     }
 
     $payload = [

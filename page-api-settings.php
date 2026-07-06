@@ -199,7 +199,7 @@ get_header();
             <div class="form-group">
                 <label for="custom_url">Endpoint Base URL</label>
                 <input type="url" id="custom_url" name="custom_url" value="<?php echo esc_attr($custom_url); ?>" placeholder="http://host.docker.internal:8080/v1">
-                <div class="help-text">Llama.cppのサーバーやvLLMなど、OpenAI互換の/v1エンドポイントURLを指定します。<br><span style="color:var(--accent);">※Docker上で動かしている場合、母艦のMac/PCに接続するには <code>http://host.docker.internal:8080/v1</code> などを指定してください。</span></div>
+                <div class="help-text">Llama.cppのサーバーやvLLMなど、OpenAI互換の/v1エンドポイントURLを指定します。<br><span style="color:var(--accent);">※Docker上で動かしている場合、母艦のMac/PCに接続するには <code>http://host.docker.internal:8080/v1</code>（Ollamaの場合は <code>http://host.docker.internal:11434/v1</code>）などを指定してください。</span></div>
             </div>
             <div class="form-group">
                 <label for="custom_model">Model Name (optional)</label>

@@ -485,21 +485,31 @@ get_header();
             xhr.open('POST', ajaxUrl, true);
 
             xhr.addEventListener('load', function() {
-                zipSubmitBtn.disabled = false;
-                zipSubmitBtn.textContent = 'まとめる';
-
                 if (xhr.status === 200) {
                     try {
                         var response = JSON.parse(xhr.responseText);
                         if (response.success) {
+                            zipSubmitBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> 完了';
+                            zipSubmitBtn.style.backgroundColor = '#10B981';
+                            zipSubmitBtn.style.borderColor = '#10B981';
                             zipResult.style.display = 'block';
                             var zipDlUrl = window.location.origin + window.location.pathname + '?dl=' + response.data.file_id;
                             zipUrlInput.value = zipDlUrl;
+                            setTimeout(() => {
+                                zipSubmitBtn.disabled = false;
+                                zipSubmitBtn.textContent = 'まとめる';
+                                zipSubmitBtn.style.backgroundColor = '';
+                                zipSubmitBtn.style.borderColor = '';
+                            }, 3000);
                         } else {
                             alert(response.data.message || 'ZIPの作成に失敗しました。');
+                            zipSubmitBtn.disabled = false;
+                            zipSubmitBtn.textContent = 'まとめる';
                         }
                     } catch (e) {
                         alert('エラーが発生しました。');
+                        zipSubmitBtn.disabled = false;
+                        zipSubmitBtn.textContent = 'まとめる';
                     }
                 } else {
                     alert('通信エラー (' + xhr.status + ')');

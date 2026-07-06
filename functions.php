@@ -689,3 +689,4 @@ function frontend_delete_account_handler() {
     }
 }
 
+require_once get_template_directory() . '/inc/functions_wiki_dump.php';

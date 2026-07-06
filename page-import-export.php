@@ -274,6 +274,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 <button type="button" class="learning-tab active" data-target="tab-import">インポート</button>
                 <button type="button" class="learning-tab" data-target="tab-export">エクスポート</button>
                 <button type="button" class="learning-tab" data-target="tab-external">外部オープンデータセット連携</button>
+                <button type="button" class="learning-tab" data-target="tab-wikipedia">Wikipediaダンプ一括処理</button>
             </div>
 
             <!-- インポートセクション -->
@@ -568,6 +569,59 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                         </div>
                         <div class="progress-bar"><div class="progress-fill" id="hf-import-progress-fill"></div></div>
                     </div>
+                </div>
+            </section>
+
+            <!-- Wikipediaダンプセクション -->
+            <section id="tab-wikipedia" class="panel-section learning-tab-content">
+                <h3 class="panel-title">
+                    <span class="material-symbols-outlined">library_books</span>
+                    Wikipediaダンプ一括処理
+                </h3>
+                
+                <div style="background: var(--bg-body, #fafafa); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-subtle, #eee); margin-bottom: 2rem;">
+                    <p style="font-size: 0.9rem; color: #555; margin-bottom: 1rem;">
+                        WikipediaのXMLダンプファイル（<a href="https://dumps.wikimedia.org/" target="_blank">dumps.wikimedia.org</a>）のURLを指定して、サーバー側でバックグラウンド処理を行い、学習用のJSONデータセットに分割保存します。<br>
+                        数GBのファイルの処理には時間がかかります。完了後、生成されたJSONファイルを個別にインポートしてください。
+                    </p>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display:block; font-weight:bold; margin-bottom:0.5rem; font-size:0.9rem;">ダンプファイルのURL:</label>
+                        <input type="text" id="wiki-dump-url" class="auth-input" placeholder="例: https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-abstract.xml.gz" style="width:100%; margin-bottom:0.5rem;">
+                        <span style="font-size: 0.8rem; color: #666;">※ `.xml.bz2` または `.xml.gz` に対応。軽量な <code>abstract.xml.gz</code> の利用を推奨します。</span>
+                    </div>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display:block; font-weight:bold; margin-bottom:0.5rem; font-size:0.9rem;">1ファイルあたりの記事数:</label>
+                        <input type="number" id="wiki-dump-chunk" class="auth-input" value="10000" min="1000" max="100000" style="width:200px;">
+                    </div>
+                    
+                    <button type="button" id="btn-wiki-start" class="btn-base btn-primary">バックグラウンド処理を開始</button>
+                    
+                    <div id="wiki-progress-container" style="display:none; margin-top: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #ddd; border-radius: 4px;">
+                        <div style="font-weight:bold; margin-bottom: 0.5rem;">ステータス: <span id="wiki-status-text">待機中</span></div>
+                        <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.5rem;" id="wiki-message-text"></div>
+                        <div class="progress-bar"><div class="progress-fill" id="wiki-progress-fill" style="width:0%"></div></div>
+                    </div>
+                </div>
+                
+                <h4 style="margin-bottom: 1rem;">生成されたデータセット一覧</h4>
+                <div style="text-align:right; margin-bottom:1rem;">
+                    <button type="button" id="btn-wiki-refresh" class="btn-base btn-secondary"><span class="material-symbols-outlined" style="font-size:1rem;">refresh</span> 更新</button>
+                </div>
+                <div class="preview-table-wrapper" style="display:block;">
+                    <table class="data-sheet">
+                        <thead>
+                            <tr>
+                                <th>ファイル名</th>
+                                <th>サイズ</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wiki-files-tbody">
+                            <tr><td colspan="3" style="text-align:center; color:#999;">ファイルがありません</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
@@ -1034,6 +1088,16 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                     currentHfFeatures = data.features || [];
                     currentHfRows = (data.rows || []).map(r => r.row);
                     
+                    // 自動フォーマット判定 (The Pile等のテキストコーパス向け)
+                    const featureNames = currentHfFeatures.map(f => f.name.toLowerCase());
+                    const hasInstruction = featureNames.some(f => ['instruction', 'prompt', 'question', 'input'].includes(f));
+                    const hasText = featureNames.some(f => ['text', 'content'].includes(f));
+                    if (!hasInstruction && hasText) {
+                        hfTargetFormat.value = 'text';
+                    } else if (hasInstruction) {
+                        hfTargetFormat.value = 'instruction';
+                    }
+                    
                     renderHfPreview();
                     renderHfMapping();
                     hfPreviewArea.style.display = 'block';
@@ -1095,7 +1159,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             
             // 自動マッピングの試み (単純なヒューリスティック)
             if (format === 'instruction') {
-                autoSelect('hf-map-instruction', ['instruction', 'prompt', 'question']);
+                autoSelect('hf-map-instruction', ['instruction', 'prompt', 'question', 'input']);
                 autoSelect('hf-map-output', ['output', 'response', 'answer']);
             } else if (format === 'text') {
                 autoSelect('hf-map-text', ['text', 'content']);
@@ -1105,11 +1169,13 @@ $upload_nonce = wp_create_nonce('learning_data_action');
         function autoSelect(selectId, hints) {
             const el = document.getElementById(selectId);
             if (!el) return;
-            for (let i = 0; i < el.options.length; i++) {
-                const val = el.options[i].value.toLowerCase();
-                if (hints.some(h => val.includes(h))) {
-                    el.selectedIndex = i;
-                    return;
+            for (const hint of hints) {
+                for (let i = 0; i < el.options.length; i++) {
+                    const val = el.options[i].value.toLowerCase();
+                    if (val.includes(hint)) {
+                        el.selectedIndex = i;
+                        return;
+                    }
                 }
             }
         }
@@ -1153,11 +1219,13 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 });
                 
                 // 既存のインポートAPIを利用
-                const finalPayload = {
-                    title: `[Import] ${hfDatasetIdInput.value}`,
-                    format: format,
-                    data: mappedData
-                };
+                const finalItems = mappedData.map(row => {
+                    return {
+                        title: `[Import] ${hfDatasetIdInput.value}`,
+                        format: format,
+                        data: row
+                    };
+                });
 
                 btnExecuteHfImport.disabled = true;
                 const progressWrapper = document.getElementById('hf-import-progress');
@@ -1169,9 +1237,9 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 progressText.textContent = '送信中...';
                 
                 const fd = new FormData();
-                fd.append('action', 'import_learning_data');
+                fd.append('action', 'frontend_learning_data_import_execute');
                 fd.append('nonce', uploadNonce);
-                fd.append('data', JSON.stringify([finalPayload]));
+                fd.append('items', JSON.stringify(finalItems));
                 
                 fetch(ajaxUrl, {
                     method: 'POST',
@@ -1208,6 +1276,141 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             }
         });
 
+        // Wikipedia Dump JS
+        let wikiPollInterval = null;
+        
+        function pollWikiStatus() {
+            const fd = new FormData();
+            fd.append('action', 'check_wiki_dump_status');
+            fd.append('nonce', uploadNonce);
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success && res.data) {
+                        const d = res.data;
+                        document.getElementById('wiki-progress-container').style.display = 'block';
+                        document.getElementById('wiki-status-text').textContent = d.state === 'processing' ? '処理中' : (d.state === 'downloading' ? 'ダウンロード中' : d.state);
+                        document.getElementById('wiki-message-text').textContent = d.message || '';
+                        
+                        if(d.state === 'completed' || d.state === 'error') {
+                            clearInterval(wikiPollInterval);
+                            wikiPollInterval = null;
+                            document.getElementById('btn-wiki-start').disabled = false;
+                            loadWikiFiles();
+                        }
+                    }
+                });
+        }
+        
+        function loadWikiFiles() {
+            const fd = new FormData();
+            fd.append('action', 'list_wiki_dump_files');
+            fd.append('nonce', uploadNonce);
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success && res.data.files) {
+                        const tbody = document.getElementById('wiki-files-tbody');
+                        if(res.data.files.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#999;">ファイルがありません</td></tr>';
+                            return;
+                        }
+                        
+                        let html = '';
+                        res.data.files.forEach(f => {
+                            const sizeMb = (f.size / 1024 / 1024).toFixed(2);
+                            html += `
+                                <tr>
+                                    <td>${escHtml(f.name)}</td>
+                                    <td>${sizeMb} MB</td>
+                                    <td>
+                                        <button type="button" class="btn-base" style="background:#4CAF50; color:#fff;" onclick="importLocalFileFromUrl('${f.url}')">インポート実行</button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        tbody.innerHTML = html;
+                    }
+                });
+        }
+        
+        window.importLocalFileFromUrl = function(url) {
+            if(!confirm('このファイルをインポートしますか？（数分かかる場合があります）')) return;
+            document.body.style.cursor = 'wait';
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    const finalItems = data.map(item => {
+                        return {
+                            title: '[Wiki] ' + item.title,
+                            format: 'text',
+                            data: { text: item.text }
+                        };
+                    });
+                    
+                    const fd = new FormData();
+                    fd.append('action', 'frontend_learning_data_import_execute');
+                    fd.append('nonce', uploadNonce);
+                    fd.append('items', JSON.stringify(finalItems));
+                    
+                    fetch(ajaxUrl, { method: 'POST', body: fd })
+                        .then(r => r.json())
+                        .then(res => {
+                            document.body.style.cursor = 'default';
+                            if(res.success) {
+                                alert('インポート完了');
+                                window.location.reload();
+                            } else {
+                                alert(res.data.message || 'インポート失敗');
+                            }
+                        }).catch(() => {
+                            document.body.style.cursor = 'default';
+                            alert('通信エラー');
+                        });
+                });
+        };
+
+        document.getElementById('btn-wiki-start')?.addEventListener('click', function() {
+            const url = document.getElementById('wiki-dump-url').value.trim();
+            const chunkSize = document.getElementById('wiki-dump-chunk').value;
+            
+            if(!url) {
+                alert('URLを入力してください。');
+                return;
+            }
+            
+            this.disabled = true;
+            document.getElementById('wiki-progress-container').style.display = 'block';
+            document.getElementById('wiki-status-text').textContent = '起動中...';
+            document.getElementById('wiki-message-text').textContent = '';
+            
+            const fd = new FormData();
+            fd.append('action', 'start_wiki_dump_process');
+            fd.append('nonce', uploadNonce);
+            fd.append('url', url);
+            fd.append('chunk_size', chunkSize);
+            
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success) {
+                        if(wikiPollInterval) clearInterval(wikiPollInterval);
+                        wikiPollInterval = setInterval(pollWikiStatus, 3000);
+                    } else {
+                        alert(res.data.message || 'エラーが発生しました');
+                        this.disabled = false;
+                    }
+                }).catch(() => {
+                    alert('通信エラー');
+                    this.disabled = false;
+                });
+        });
+
+        document.getElementById('btn-wiki-refresh')?.addEventListener('click', loadWikiFiles);
+        
+        // Initial load
+        loadWikiFiles();
+        
         function escHtml(str) {
             const div = document.createElement('div');
             div.appendChild(document.createTextNode(str));
