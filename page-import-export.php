@@ -276,6 +276,7 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                 <button type="button" class="learning-tab" data-target="tab-huggingface">Hugging Face</button>
                 <button type="button" class="learning-tab" data-target="tab-wikipedia">Wikipediaダンプ一括処理</button>
                 <button type="button" class="learning-tab" data-target="tab-commons">Wikimedia Commons一括処理</button>
+                <button type="button" class="learning-tab" data-target="tab-webscrape">Webスクレイピング</button>
             </div>
 
             <!-- インポートセクション -->
@@ -675,6 +676,38 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                             <tr><td colspan="3" style="text-align:center; color:#999;">ファイルがありません</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </section>
+
+            <!-- Webスクレイピングセクション -->
+            <section id="tab-webscrape" class="panel-section learning-tab-content">
+                <h3 class="panel-title">
+                    <span class="material-symbols-outlined">web</span>
+                    Webページスクレイピング
+                </h3>
+                
+                <div style="background: var(--bg-body, #fafafa); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-subtle, #eee); margin-bottom: 2rem;">
+                    <p style="font-size: 0.9rem; color: #555; margin-bottom: 1rem;">
+                        入力したURLをHeadlessブラウザでレンダリングし、フルサイズのスクリーンショット画像と実装データ（HTMLソースコード）を取得・関連付けて学習データとして登録します。
+                    </p>
+                    
+                    <div id="webscrape-alert" style="display:none; padding:1rem; background:#fee; border:1px solid #fcc; color:#c00; margin-bottom:1.5rem; border-radius:4px;">
+                        <strong>機能が無効化されています：</strong> 現在の環境ではHeadlessブラウザコンテナ（browserless）との通信ができません。
+                    </div>
+
+                    <div id="webscrape-form">
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display:block; font-weight:bold; margin-bottom:0.5rem; font-size:0.9rem;">対象URL:</label>
+                            <input type="text" id="webscrape-url" class="auth-input" placeholder="例: https://example.com" style="width:100%; margin-bottom:0.5rem;">
+                        </div>
+                        
+                        <button type="button" id="btn-webscrape-start" class="btn-base btn-primary">取得と登録を実行</button>
+                        
+                        <div id="webscrape-progress-container" style="display:none; margin-top: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #ddd; border-radius: 4px;">
+                            <div style="font-weight:bold; margin-bottom: 0.5rem;">ステータス: <span id="webscrape-status-text">処理中...</span></div>
+                            <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.5rem;">しばらくお待ちください。（ページサイズにより数十秒かかる場合があります）</div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -1565,6 +1598,63 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             loadCommonsFiles();
         }
         
+        // Web Scrape JS
+        function checkBrowserlessStatus() {
+            const fd = new FormData();
+            fd.append('action', 'check_browserless_status');
+            fd.append('nonce', uploadNonce);
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if(!res.success || !res.data.available) {
+                        document.getElementById('webscrape-form').style.display = 'none';
+                        document.getElementById('webscrape-alert').style.display = 'block';
+                    }
+                }).catch(() => {
+                    document.getElementById('webscrape-form').style.display = 'none';
+                    document.getElementById('webscrape-alert').style.display = 'block';
+                });
+        }
+
+        document.getElementById('btn-webscrape-start')?.addEventListener('click', function() {
+            const url = document.getElementById('webscrape-url').value.trim();
+            if(!url) {
+                alert('URLを入力してください。');
+                return;
+            }
+            
+            this.disabled = true;
+            document.getElementById('webscrape-progress-container').style.display = 'block';
+            document.getElementById('webscrape-status-text').textContent = '処理中...';
+            
+            const fd = new FormData();
+            fd.append('action', 'start_web_scrape');
+            fd.append('nonce', uploadNonce);
+            fd.append('url', url);
+            
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success) {
+                        document.getElementById('webscrape-status-text').textContent = '完了';
+                        alert('データが正常に取得・登録されました。\\n（画面上部のメニュー「シート一覧」から確認できます）');
+                        document.getElementById('webscrape-url').value = '';
+                    } else {
+                        document.getElementById('webscrape-status-text').textContent = 'エラー';
+                        alert(res.data.message || 'エラーが発生しました');
+                    }
+                    this.disabled = false;
+                }).catch(() => {
+                    document.getElementById('webscrape-status-text').textContent = 'エラー';
+                    alert('通信エラー');
+                    this.disabled = false;
+                });
+        });
+
+        if (document.getElementById('btn-webscrape-start')) {
+            checkBrowserlessStatus();
+        }
+
         function escHtml(str) {
             const div = document.createElement('div');
             div.appendChild(document.createTextNode(str));

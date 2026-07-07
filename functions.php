@@ -691,3 +691,4 @@ function frontend_delete_account_handler() {
 
 require_once get_template_directory() . '/inc/functions_wiki_dump.php';
 require_once get_template_directory() . '/inc/functions_commons_dump.php';
+require_once get_template_directory() . '/inc/functions_web_scrape.php';
