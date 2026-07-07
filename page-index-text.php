@@ -233,6 +233,18 @@ get_header();
         background: var(--bg-surface, #fff);
         color: #333333;
         word-break: break-word;
+        height: 1px; /* セルの高さいっぱいにpreを表示するためのハック */
+    }
+
+    /* pre（スクロールエリア）を持つtdはpaddingを0にして隙間をなくす */
+    .data-sheet td:has(pre),
+    .data-sheet td:has(.sheet-pre) {
+        padding: 0;
+    }
+
+    .data-sheet th.col-title,
+    .data-sheet td.col-title {
+        min-width: 150px; /* タイトルが縦長に潰れるのを防ぐ */
     }
 
     .data-sheet td pre,
@@ -240,11 +252,13 @@ get_header();
         margin: 0;
         white-space: pre-wrap;
         font-size: 0.85rem;
-        max-height: 200px;
+        max-height: 250px;
+        height: 100%; /* セルの高さいっぱいに表示 */
         overflow-y: auto;
         background: transparent;
-        padding: 0;
+        padding: 0.5rem 0.75rem; /* スクロールエリアの内側にパディングを持たせる */
         border-radius: 0;
+        box-sizing: border-box;
     }
 
     .data-sheet td pre {
@@ -773,7 +787,6 @@ get_header();
                 const th = document.createElement('th');
                 th.textContent = 'アクション';
                 th.className = 'col-action';
-                th.style.textAlign = 'center';
                 th.style.verticalAlign = 'middle';
                 th.style.padding = '0.5rem';
                 theadTr.appendChild(th);
@@ -792,11 +805,10 @@ get_header();
                     const id = tdFirst.textContent.trim();
                     const td = document.createElement('td');
                     td.className = 'col-action';
-                    td.style.textAlign = 'center';
                     td.style.verticalAlign = 'middle';
                     td.style.padding = '0.2rem';
                     td.innerHTML = `
-                        <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-start; align-items: center;">
                             <a href="${editBaseUrl}?edit_id=${id}" class="action-btn btn-edit" title="編集">
                                 <span class="material-symbols-outlined">edit</span>
                             </a>

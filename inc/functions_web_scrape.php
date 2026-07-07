@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ファイル名: functions_web_scrape.php
  * パス: /Users/Shared/Docker/AI-data-manager-docker/www/html/wordpress/wp-content/themes/AI-data-manager/inc/functions_web_scrape.php
@@ -13,21 +14,23 @@ if (!defined('ABSPATH')) {
  * Headlessブラウザ（browserless等）が利用可能かチェックする
  * @return bool
  */
-function is_headless_browser_available() {
+function is_headless_browser_available()
+{
     $browserless_url = 'http://browserless:3000/';
     $response = wp_remote_get($browserless_url, ['timeout' => 3]);
-    
+
     if (is_wp_error($response)) {
         return false;
     }
-    
+
     $status_code = wp_remote_retrieve_response_code($response);
     // browserlessのルートは200 OKまたは404を返す可能性があるが、接続できればOKとする
     return ($status_code >= 200 && $status_code < 500);
 }
 
 add_action('wp_ajax_check_browserless_status', 'check_browserless_status_handler');
-function check_browserless_status_handler() {
+function check_browserless_status_handler()
+{
     if (!check_ajax_referer('learning_data_action', 'nonce', false)) {
         wp_send_json_error(['message' => 'Nonce verification failed']);
     }
@@ -40,7 +43,8 @@ function check_browserless_status_handler() {
 }
 
 add_action('wp_ajax_start_web_scrape', 'start_web_scrape_handler');
-function start_web_scrape_handler() {
+function start_web_scrape_handler()
+{
     if (!check_ajax_referer('learning_data_action', 'nonce', false)) {
         wp_send_json_error(['message' => 'Nonce verification failed']);
     }
@@ -56,9 +60,30 @@ function start_web_scrape_handler() {
 
     // Browserlessの /function APIを利用してリモートでPuppeteerを実行
     $browserless_function_url = 'http://browserless:3000/function';
-    
+
     $js_code = "
     module.exports = async ({ page, context }) => {
+        let cssContent = '';
+        let jsContent = '';
+
+        page.on('response', async (response) => {
+            try {
+                const type = response.request().resourceType();
+                const url = response.url();
+                if (url.startsWith('data:')) return;
+                
+                if (type === 'stylesheet') {
+                    const text = await response.text();
+                    cssContent += '/* Source: ' + url + ' */\\n' + text + '\\n';
+                } else if (type === 'script') {
+                    const text = await response.text();
+                    jsContent += '/* Source: ' + url + ' */\\n' + text + '\\n';
+                }
+            } catch(e) {
+                // Ignore errors like body not found
+            }
+        });
+
         // 横幅1920pxに設定（縦はなりゆきだが、とりあえず高めに設定してフルページキャプチャする）
         await page.setViewport({ width: 1920, height: 1080 });
         
@@ -83,10 +108,45 @@ function start_web_scrape_handler() {
         });
         
         const html = await page.content();
-        const screenshot = await page.screenshot({ fullPage: true, encoding: 'base64' });
+        
+        // 横スクロールバーを隠す
+        await page.addStyleTag({ content: 'html, body { overflow-x: hidden !important; }' });
+        
+        // ページ全体の高さを取得（最低でも1080pxを保証）
+        const docHeight = await page.evaluate(() => {
+            return Math.max(
+                document.body.scrollHeight, document.documentElement.scrollHeight,
+                document.body.offsetHeight, document.documentElement.offsetHeight,
+                document.body.clientHeight, document.documentElement.clientHeight,
+                1080
+            );
+        });
+        
+        // 領域を 1920 x 全体の高さ に固定してスクリーンショットを撮影する
+        const screenshot = await page.screenshot({
+            clip: { x: 0, y: 0, width: 1920, height: docHeight },
+            encoding: 'base64'
+        });
+        
+        const inlineData = await page.evaluate(() => {
+            let inlineCss = '';
+            let inlineJs = '';
+            document.querySelectorAll('style').forEach(s => {
+                inlineCss += '/* Inline Style */\\n' + s.innerHTML + '\\n';
+            });
+            document.querySelectorAll('script:not([src])').forEach(s => {
+                if (!s.type || s.type === 'text/javascript' || s.type === 'module' || s.type === 'application/javascript') {
+                    inlineJs += '/* Inline Script */\\n' + s.innerHTML + '\\n';
+                }
+            });
+            return { css: inlineCss, js: inlineJs };
+        });
+
+        cssContent += inlineData.css;
+        jsContent += inlineData.js;
         
         return { 
-            data: { html, screenshot },
+            data: { html, screenshot, css: cssContent, js: jsContent },
             type: 'application/json'
         };
     };
@@ -107,7 +167,7 @@ function start_web_scrape_handler() {
 
     $status_code = wp_remote_retrieve_response_code($response);
     $body = wp_remote_retrieve_body($response);
-    
+
     if ($status_code !== 200) {
         wp_send_json_error(['message' => 'Browserlessエラー (' . $status_code . '): ' . $body]);
     }
@@ -138,18 +198,23 @@ function start_web_scrape_handler() {
     ];
     $attach_id = wp_insert_attachment($attachment, $filepath);
     require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+    // 縦に長いスクリーンショットがWordPressの自動リサイズ機能（上限2560px）によって
+    // 大幅に縮小され、横幅が極端に小さくなってしまうのを防ぐ
+    add_filter('big_image_size_threshold', '__return_false');
     $attach_data = wp_generate_attachment_metadata($attach_id, $filepath);
     wp_update_attachment_metadata($attach_id, $attach_data);
+    remove_filter('big_image_size_threshold', '__return_false');
 
     // 学習データとして登録
     $post_title = 'Scraped: ' . parse_url($url, PHP_URL_HOST);
-    
+
     $payload = [
         'format' => 'frontend_code',
         'data' => [
             'html' => $data['html'],
-            'css' => '/* 取得したページのフルサイズ画像URL: ' . $file_url . ' */',
-            'js' => '// URL: ' . $url
+            'css' => isset($data['css']) ? $data['css'] : '',
+            'js' => isset($data['js']) ? $data['js'] : ''
         ]
     ];
 
