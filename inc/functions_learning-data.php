@@ -334,6 +334,64 @@ function frontend_learning_data_import_execute_handler()
         if (!is_wp_error($post_id) && $post_id > 0) {
             update_post_meta($post_id, 'is_learning_data', '1');
 
+            if (!empty($item['source_url'])) {
+                update_post_meta($post_id, 'learning_data_source', sanitize_text_field($item['source_url']));
+            }
+            if (!empty($item['imported_at'])) {
+                update_post_meta($post_id, 'learning_data_imported_at', sanitize_text_field($item['imported_at']));
+            } else {
+                update_post_meta($post_id, 'learning_data_imported_at', current_time('mysql'));
+            }
+
+            // 画像のインポート処理 (Base64 または URL)
+            if (isset($item['data']['image_base64']) || isset($item['data']['image_url'])) {
+                require_once(ABSPATH . 'wp-admin/includes/image.php');
+                require_once(ABSPATH . 'wp-admin/includes/file.php');
+                require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+                $upload_dir = wp_upload_dir();
+                $filename = isset($item['data']['image_filename']) && $item['data']['image_filename'] !== '' ? sanitize_file_name($item['data']['image_filename']) : 'imported_image_' . md5(uniqid()) . '.jpg';
+                // 拡張子がない場合は適当に付与
+                if (pathinfo($filename, PATHINFO_EXTENSION) === '') {
+                    $filename .= '.jpg';
+                }
+                $filepath = $upload_dir['path'] . '/' . $filename;
+                
+                $image_saved = false;
+                if (isset($item['data']['image_base64'])) {
+                    $image_data = base64_decode($item['data']['image_base64']);
+                    if ($image_data !== false) {
+                        $image_saved = (file_put_contents($filepath, $image_data) !== false);
+                    }
+                } else if (isset($item['data']['image_url'])) {
+                    $response = wp_remote_get($item['data']['image_url'], ['timeout' => 30]);
+                    if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                        $image_data = wp_remote_retrieve_body($response);
+                        $image_saved = (file_put_contents($filepath, $image_data) !== false);
+                    }
+                }
+
+                if ($image_saved) {
+                    $filetype = wp_check_filetype($filename, null);
+                    $attachment = [
+                        'post_mime_type' => $filetype['type'],
+                        'post_title'     => sanitize_file_name($filename),
+                        'post_content'   => '',
+                        'post_status'    => 'inherit',
+                        'post_parent'    => $post_id
+                    ];
+                    $attach_id = wp_insert_attachment($attachment, $filepath, $post_id);
+                    if (!is_wp_error($attach_id)) {
+                        add_filter('big_image_size_threshold', '__return_false');
+                        $attach_data = wp_generate_attachment_metadata($attach_id, $filepath);
+                        wp_update_attachment_metadata($attach_id, $attach_data);
+                        remove_filter('big_image_size_threshold', '__return_false');
+
+                        set_post_thumbnail($post_id, $attach_id);
+                    }
+                }
+            }
+
             // 簡易POST配列を作ってフック実行
             $mock_post = [
                 'json_data' => wp_slash(json_encode(['format' => $item['format']])),
@@ -374,8 +432,13 @@ function _detect_and_format_import_item($raw, $force_format = 'auto')
         $format = 'dpo';
     } else if (isset($check_target['html']) || isset($check_target['css']) || isset($check_target['js'])) {
         $format = 'frontend_code';
-    } else if (isset($check_target['text']) && count($check_target) === 1) {
-        $format = 'plain';
+    } else if (isset($check_target['text'])) {
+        $keys = array_keys($check_target);
+        $allowed = ['text', 'image_base64', 'image_url', 'image_filename'];
+        $diff = array_diff($keys, $allowed);
+        if (empty($diff)) {
+            $format = 'plain';
+        }
     } else if (is_array($check_target) && wp_is_numeric_array($check_target) && !empty($check_target)) {
         // 配列（リスト）パターンのフォールバック
         $first = $check_target[0];
@@ -520,6 +583,33 @@ function frontend_learning_data_export_handler()
                 'format' => $post_format,
                 'data' => isset($content['data']) ? $content['data'] : []
             ];
+
+            $source_url = get_post_meta(get_the_ID(), 'learning_data_source', true);
+            if ($source_url) {
+                $item['source_url'] = $source_url;
+            }
+            $imported_at = get_post_meta(get_the_ID(), 'learning_data_imported_at', true);
+            if (!$imported_at) {
+                // フォールバック: 投稿の作成日を使用
+                $imported_at = get_the_date('Y-m-d\TH:i:sP');
+            }
+            $item['imported_at'] = $imported_at;
+
+            // アイキャッチ画像（添付画像）があればBase64エンコードして含める
+            $thumbnail_id = get_post_thumbnail_id(get_the_ID());
+            if ($thumbnail_id) {
+                $image_path = get_attached_file($thumbnail_id);
+                if ($image_path && file_exists($image_path)) {
+                    $image_data = file_get_contents($image_path);
+                    $base64 = base64_encode($image_data);
+                    $filename = wp_basename($image_path);
+                    if (!is_array($item['data'])) {
+                        $item['data'] = ['text' => $item['data']];
+                    }
+                    $item['data']['image_base64'] = $base64;
+                    $item['data']['image_filename'] = $filename;
+                }
+            }
 
             $output_style = isset($_REQUEST['output_style']) ? sanitize_text_field($_REQUEST['output_style']) : 'raw';
 

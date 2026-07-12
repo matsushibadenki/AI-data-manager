@@ -701,6 +701,12 @@ $upload_nonce = wp_create_nonce('learning_data_action');
                             <input type="text" id="webscrape-url" class="auth-input" placeholder="例: https://example.com" style="width:100%; margin-bottom:0.5rem;">
                         </div>
                         
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display:block; font-weight:bold; margin-bottom:0.5rem; font-size:0.9rem;">撮影待機遅延時間 (秒):</label>
+                            <input type="number" id="webscrape-delay-time" class="auth-input" value="0" min="0" max="60" placeholder="0" style="width:100px; margin-bottom:0.5rem;">
+                            <p style="font-size: 0.8rem; color: #666; margin: 0;">※重い動画等の読み込みを待つ場合に入力（0で遅延なし）</p>
+                        </div>
+                        
                         <button type="button" id="btn-webscrape-start" class="btn-base btn-primary">取得と登録を実行</button>
                         
                         <div id="webscrape-progress-container" style="display:none; margin-top: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #ddd; border-radius: 4px;">
@@ -1029,7 +1035,9 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             return {
                 title: raw.title || '',
                 format: format,
-                data: checkTarget
+                data: checkTarget,
+                source_url: raw.source_url || checkTarget.source_url || '',
+                imported_at: raw.imported_at || checkTarget.imported_at || ''
             };
         }
 
@@ -1631,6 +1639,11 @@ $upload_nonce = wp_create_nonce('learning_data_action');
             fd.append('action', 'start_web_scrape');
             fd.append('nonce', uploadNonce);
             fd.append('url', url);
+            
+            const delayTime = document.getElementById('webscrape-delay-time');
+            if (delayTime && delayTime.value) {
+                fd.append('delay_time', delayTime.value);
+            }
             
             fetch(ajaxUrl, { method: 'POST', body: fd })
                 .then(r => r.json())

@@ -58,6 +58,10 @@ function start_web_scrape_handler()
         wp_send_json_error(['message' => 'URLが入力されていません。']);
     }
 
+    $delay_time = isset($_POST['delay_time']) ? (int) $_POST['delay_time'] : 0;
+    if ($delay_time < 0) $delay_time = 0;
+    if ($delay_time > 120) $delay_time = 120; // 最大120秒に制限
+
     // Browserlessの /function APIを利用してリモートでPuppeteerを実行
     $browserless_function_url = 'http://browserless:3000/function';
 
@@ -84,49 +88,238 @@ function start_web_scrape_handler()
             }
         });
 
-        // 横幅1920pxに設定（縦はなりゆきだが、とりあえず高めに設定してフルページキャプチャする）
+        // 横幅1920pxに設定
         await page.setViewport({ width: 1920, height: 1080 });
         
-        // ネットワークアイドル状態まで待機（レンダリング完了を待つ）
-        await page.goto(context.url, { waitUntil: 'networkidle2', timeout: 30000 });
+        // ユーザー指定の遅延時間を考慮したタイムアウト設定
+        const delayMs = (context.delay_time || 0) * 1000;
+        const gotoTimeout = Math.max(30000, 30000 + delayMs);
         
-        // 少しスクロールして遅延読み込みをトリガー（簡易的）
-        await page.evaluate(async () => {
-            await new Promise((resolve) => {
-                let totalHeight = 0;
-                let distance = 100;
-                let timer = setInterval(() => {
-                    let scrollHeight = document.body.scrollHeight;
-                    window.scrollBy(0, distance);
-                    totalHeight += distance;
-                    if(totalHeight >= scrollHeight - window.innerHeight){
-                        clearInterval(timer);
-                        resolve();
+        // ネットワークアイドル状態まで待機（レンダリング完了を待つ）
+        try {
+            // networkidle0だと無限ローディングするスクリプトがある場合にタイムアウトするため networkidle2 に緩和
+            await page.goto(context.url, { waitUntil: 'networkidle2', timeout: gotoTimeout });
+        } catch (e) {
+            // タイムアウトしても大部分は読み込み完了しているため処理を続行する
+        }
+        
+        // 初期ローディングが終わるまで少し待機（ローディング画面対策）
+        await new Promise(r => setTimeout(r, 3000));
+        
+        // ユーザー指定の遅延時間がある場合はさらに待機
+        if (delayMs > 0) {
+            await new Promise(r => setTimeout(r, delayMs));
+        }
+
+        // スクロールロックの解除とローディング画面の強制非表示
+        await page.evaluate(() => {
+            document.body.style.overflow = 'auto';
+            document.documentElement.style.overflow = 'auto';
+            
+            // 画面全体を覆うfixed要素(ローダー等)を非表示にする
+            const elements = document.querySelectorAll('div, section');
+            elements.forEach(el => {
+                const style = window.getComputedStyle(el);
+                if (style.position === 'fixed' && style.zIndex >= 900) {
+                    const w = parseInt(style.width, 10) || 0;
+                    const h = parseInt(style.height, 10) || 0;
+                    if ((style.width === '100vw' || w >= window.innerWidth * 0.9) && 
+                        (style.height === '100vh' || h >= window.innerHeight * 0.9)) {
+                        el.style.display = 'none';
                     }
-                }, 100);
+                }
+            });
+        });
+
+        // iframeの遅延読み込みを解除
+        await page.evaluate(() => {
+            document.querySelectorAll('iframe[loading=\"lazy\"]').forEach(iframe => {
+                iframe.loading = 'eager';
             });
         });
         
-        const html = await page.content();
-        
-        // 横スクロールバーを隠す
-        await page.addStyleTag({ content: 'html, body { overflow-x: hidden !important; }' });
-        
-        // ページ全体の高さを取得（最低でも1080pxを保証）
+        // GPU診断情報
+        const graphicsDiagnostics = await page.evaluate(() => {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            let webgl = null;
+            if (gl) {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                webgl = {
+                    version: gl.getParameter(gl.VERSION),
+                    vendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+                    renderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+                    maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+                    maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)
+                };
+            }
+            const testVideo = document.createElement('video');
+            return {
+                webgl,
+                webgpu: Boolean(navigator.gpu),
+                codecs: {
+                    h264: testVideo.canPlayType('video/mp4; codecs=\"avc1.42E01E\"'),
+                    hevc: testVideo.canPlayType('video/mp4; codecs=\"hvc1\"'),
+                    vp9: testVideo.canPlayType('video/webm; codecs=\"vp9\"'),
+                    av1: testVideo.canPlayType('video/mp4; codecs=\"av01.0.05M.08\"')
+                },
+                userAgent: navigator.userAgent
+            };
+        });
+
         const docHeight = await page.evaluate(() => {
             return Math.max(
-                document.body.scrollHeight, document.documentElement.scrollHeight,
-                document.body.offsetHeight, document.documentElement.offsetHeight,
-                document.body.clientHeight, document.documentElement.clientHeight,
+                document.documentElement.scrollHeight,
+                document.body.scrollHeight,
                 1080
             );
         });
-        
-        // 領域を 1920 x 全体の高さ に固定してスクリーンショットを撮影する
-        const screenshot = await page.screenshot({
-            clip: { x: 0, y: 0, width: 1920, height: docHeight },
-            encoding: 'base64'
+
+        const viewportWidth = 1920;
+        const viewportHeight = 1080;
+
+        await page.setViewport({
+            width: viewportWidth,
+            height: viewportHeight,
+            deviceScaleFactor: 1
         });
+
+        const captures = [];
+
+        // 2枚目以降のタイルで固定ヘッダー等が重複して映り込むのを防ぐための関数を定義
+        await page.evaluate(() => {
+            window.__hideFixedElements = (hide) => {
+                if (!window.__fixedElements) {
+                    window.__fixedElements = [];
+                    const elements = document.querySelectorAll('*');
+                    for (const el of elements) {
+                        const style = window.getComputedStyle(el);
+                        if (style.position === 'fixed' || style.position === 'sticky') {
+                            window.__fixedElements.push({
+                                el: el,
+                                originalVisibility: el.style.visibility
+                            });
+                        }
+                    }
+                }
+                for (const item of window.__fixedElements) {
+                    // opacity:0 だとクリック判定が残るなどの影響があるが撮影用途なら visibility:hidden が最適
+                    item.el.style.visibility = hide ? 'hidden' : item.originalVisibility;
+                }
+            };
+        });
+
+        for (let y = 0; y < docHeight; y += viewportHeight) {
+            await page.evaluate((scrollY) => {
+                window.scrollTo(0, scrollY);
+                if (window.__hideFixedElements) {
+                    // y > 0 なら固定要素を隠し、y === 0（トップ）なら表示状態に戻す
+                    window.__hideFixedElements(scrollY > 0);
+                }
+            }, y);
+
+            // スクロールによるlazy-load、Canvas再描画、動画フレーム更新を待つ
+            await new Promise(resolve => setTimeout(resolve, 700));
+
+            // 現在表示されている動画のフレーム生成を待つ
+            await page.evaluate(async () => {
+                const visibleVideos = [...document.querySelectorAll('video')]
+                    .filter(video => {
+                        const rect = video.getBoundingClientRect();
+                        return (
+                            rect.bottom > 0 &&
+                            rect.top < window.innerHeight &&
+                            rect.right > 0 &&
+                            rect.left < window.innerWidth
+                        );
+                    });
+
+                await Promise.all(visibleVideos.map(async video => {
+                    try {
+                        video.muted = true;
+                        video.playsInline = true;
+
+                        if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+                            video.load();
+
+                            await Promise.race([
+                                new Promise(resolve => {
+                                    video.addEventListener('loadeddata', resolve, {
+                                        once: true
+                                    });
+                                }),
+                                new Promise(resolve => setTimeout(resolve, 3000))
+                            ]);
+                        }
+
+                        if (Number.isFinite(video.duration) && video.duration > 0) {
+                            const targetTime = Math.min(
+                                Math.max(0.1, video.duration * 0.25),
+                                video.duration - 0.05
+                            );
+
+                            if (Math.abs(video.currentTime - targetTime) > 0.05) {
+                                video.currentTime = targetTime;
+
+                                await Promise.race([
+                                    new Promise(resolve => {
+                                        video.addEventListener('seeked', resolve, {
+                                            once: true
+                                        });
+                                    }),
+                                    new Promise(resolve => setTimeout(resolve, 3000))
+                                ]);
+                            }
+                        }
+
+                        if ('requestVideoFrameCallback' in video) {
+                            await Promise.race([
+                                new Promise(resolve => {
+                                    video.requestVideoFrameCallback(() => resolve());
+                                }),
+                                new Promise(resolve => setTimeout(resolve, 1000))
+                            ]);
+                        }
+
+                        video.pause();
+                    } catch (e) {
+                        // 再生不能な動画はそのまま撮影する
+                    }
+                }));
+
+                // Canvas/WebGLの次の描画タイミングを待つ
+                await new Promise(resolve => {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(resolve);
+                    });
+                });
+            });
+
+            let actualHeight = Math.min(viewportHeight, docHeight - y);
+            actualHeight = Math.max(1, Math.round(actualHeight));
+
+            const image = await page.screenshot({
+                type: 'png',
+                encoding: 'base64',
+                clip: {
+                    x: 0,
+                    y: y,
+                    width: viewportWidth,
+                    height: actualHeight
+                },
+                captureBeyondViewport: false
+            });
+
+            captures.push({
+                y,
+                width: viewportWidth,
+                height: actualHeight,
+                image
+            });
+        }
+
+        await page.evaluate(() => window.scrollTo(0, 0));
+        const html = await page.content();
         
         const inlineData = await page.evaluate(() => {
             let inlineCss = '';
@@ -146,7 +339,7 @@ function start_web_scrape_handler()
         jsContent += inlineData.js;
         
         return { 
-            data: { html, screenshot, css: cssContent, js: jsContent },
+            data: { html, captures, css: cssContent, js: jsContent, graphicsDiagnostics },
             type: 'application/json'
         };
     };
@@ -156,9 +349,12 @@ function start_web_scrape_handler()
         'headers' => ['Content-Type' => 'application/json'],
         'body' => wp_json_encode([
             'code' => $js_code,
-            'context' => ['url' => $url]
+            'context' => [
+                'url' => $url,
+                'delay_time' => $delay_time
+            ]
         ]),
-        'timeout' => 60 // スクレイピングは時間がかかるためタイムアウトを長めに設定
+        'timeout' => 60 + $delay_time // ユーザー指定の遅延時間に合わせてタイムアウトを延長
     ]);
 
     if (is_wp_error($response)) {
@@ -173,7 +369,7 @@ function start_web_scrape_handler()
     }
 
     $data = json_decode($body, true);
-    if (!$data || !isset($data['html']) || !isset($data['screenshot'])) {
+    if (!$data || !isset($data['html']) || !isset($data['captures'])) {
         wp_send_json_error(['message' => '不正なデータが返却されました。']);
     }
 
@@ -184,8 +380,55 @@ function start_web_scrape_handler()
     $filepath = $scrape_dir . '/' . $filename;
     $file_url = $upload_dir['url'] . '/' . $filename;
 
-    $image_data = base64_decode($data['screenshot']);
-    if (file_put_contents($filepath, $image_data) === false) {
+    // 分割された画像をPHP側で結合
+    $totalHeight = 0;
+    $width = 1920;
+    foreach ($data['captures'] as $cap) {
+        $totalHeight += $cap['height'];
+    }
+
+    try {
+        if (extension_loaded('imagick')) {
+            $imagick = new Imagick();
+            $imagick->newImage($width, $totalHeight, new ImagickPixel('white'));
+            $imagick->setImageFormat('png');
+
+            foreach ($data['captures'] as $cap) {
+                $blob = base64_decode($cap['image']);
+                $tile = new Imagick();
+                $tile->readImageBlob($blob);
+                $imagick->compositeImage($tile, Imagick::COMPOSITE_DEFAULT, 0, $cap['y']);
+                $tile->clear();
+                $tile->destroy();
+            }
+            $imagick->writeImage($filepath);
+            $imagick->clear();
+            $imagick->destroy();
+        } elseif (extension_loaded('gd')) {
+            $img = imagecreatetruecolor($width, $totalHeight);
+            $white = imagecolorallocate($img, 255, 255, 255);
+            imagefill($img, 0, 0, $white);
+
+            foreach ($data['captures'] as $cap) {
+                $blob = base64_decode($cap['image']);
+                $tile = imagecreatefromstring($blob);
+                if ($tile !== false) {
+                    imagecopy($img, $tile, 0, $cap['y'], 0, 0, $cap['width'], $cap['height']);
+                    imagedestroy($tile);
+                }
+            }
+            imagepng($img, $filepath);
+            imagedestroy($img);
+        } else {
+            // 結合できない場合はフォールバックとして1枚目だけ保存
+            $image_data = base64_decode($data['captures'][0]['image']);
+            file_put_contents($filepath, $image_data);
+        }
+    } catch (Exception $e) {
+        wp_send_json_error(['message' => '画像の結合に失敗しました: ' . $e->getMessage()]);
+    }
+
+    if (!file_exists($filepath)) {
         wp_send_json_error(['message' => '画像の保存に失敗しました。']);
     }
 
@@ -214,7 +457,8 @@ function start_web_scrape_handler()
         'data' => [
             'html' => $data['html'],
             'css' => isset($data['css']) ? $data['css'] : '',
-            'js' => isset($data['js']) ? $data['js'] : ''
+            'js' => isset($data['js']) ? $data['js'] : '',
+            'graphicsDiagnostics' => isset($data['graphicsDiagnostics']) ? $data['graphicsDiagnostics'] : null
         ]
     ];
 
@@ -234,6 +478,15 @@ function start_web_scrape_handler()
     update_post_meta($post_id, 'is_learning_data', '1');
     update_post_meta($post_id, 'data_format', 'frontend_code');
     update_post_meta($post_id, 'learning_data_source', $url);
+
+    // アタッチメントと投稿を紐付け（アイキャッチ画像として設定）
+    set_post_thumbnail($post_id, $attach_id);
+
+    // アタッチメントの親投稿を設定
+    wp_update_post([
+        'ID' => $attach_id,
+        'post_parent' => $post_id
+    ]);
 
     wp_send_json_success([
         'message' => 'スクレイピングが完了し、データが登録されました。',

@@ -106,9 +106,15 @@ def process_dump(url, output_dir, chunk_size, status_file):
             if title and raw_text and not title.startswith('Wikipedia:') and not title.startswith('File:'):
                 clean_text = clean_wikitext(raw_text)
                 if len(clean_text) > 50: # Skip very short/empty articles
+                    import datetime
+                    import urllib.parse
+                    source_url = f"https://ja.wikipedia.org/wiki/{urllib.parse.quote(title)}"
+                    imported_at = datetime.datetime.now().isoformat()
                     current_chunk.append({
                         "title": title,
-                        "text": clean_text
+                        "text": clean_text,
+                        "source_url": source_url,
+                        "imported_at": imported_at
                     })
                     total_processed += 1
 

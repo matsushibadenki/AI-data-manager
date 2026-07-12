@@ -124,10 +124,16 @@ def main():
                     
                     data = extract_metadata(item)
                     if data:
+                        import datetime
+                        import urllib.parse
+                        source_url = data['metadata'].get('url', f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(data['metadata']['title'])}")
+                        imported_at = datetime.datetime.now().isoformat()
                         current_chunk.append({
                             "instruction": "次の画像について説明してください。",
                             "output": data['metadata']['caption'] if data['metadata']['caption'] else data['metadata']['title'],
                             "image_url": data['image_url'],
+                            "source_url": source_url,
+                            "imported_at": imported_at,
                             "metadata": data['metadata']
                         })
                         saved_count += 1
