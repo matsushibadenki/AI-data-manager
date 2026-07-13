@@ -168,11 +168,39 @@ function start_web_scrape_handler()
         });
 
         const docHeight = await page.evaluate(() => {
-            return Math.max(
-                document.documentElement.scrollHeight,
-                document.body.scrollHeight,
+            const heights = [
+                document.documentElement ? document.documentElement.scrollHeight : 0,
+                document.documentElement ? document.documentElement.offsetHeight : 0,
+                document.body ? document.body.scrollHeight : 0,
+                document.body ? document.body.offsetHeight : 0,
+                window.innerHeight,
                 1080
-            );
+            ];
+
+            document.querySelectorAll('*').forEach(el => {
+                if (el.scrollHeight > el.clientHeight + 20) {
+                    heights.push(el.scrollHeight);
+                }
+            });
+
+            return Math.max(...heights.filter(height => Number.isFinite(height) && height > 0));
+        });
+
+        await page.evaluate(() => {
+            window.__getScrollableElements = () => {
+                const elements = [
+                    document.scrollingElement,
+                    document.documentElement,
+                    document.body,
+                    ...document.querySelectorAll('*')
+                ].filter(Boolean);
+
+                return [...new Set(elements)].filter(el => {
+                    const style = window.getComputedStyle(el);
+                    const overflow = style.overflow + style.overflowY;
+                    return el.scrollHeight > el.clientHeight + 20 && /(auto|scroll|overlay|hidden)/.test(overflow);
+                });
+            };
         });
 
         const viewportWidth = 1920;
@@ -209,14 +237,28 @@ function start_web_scrape_handler()
             };
         });
 
+        const maxScrollY = Math.max(0, docHeight - viewportHeight);
+        const scrollPositions = [];
         for (let y = 0; y < docHeight; y += viewportHeight) {
+            scrollPositions.push(Math.min(y, maxScrollY));
+        }
+        if (!scrollPositions.includes(maxScrollY)) {
+            scrollPositions.push(maxScrollY);
+        }
+
+        for (const targetY of [...new Set(scrollPositions)]) {
             await page.evaluate((scrollY) => {
                 window.scrollTo(0, scrollY);
+                if (window.__getScrollableElements) {
+                    window.__getScrollableElements().forEach(el => {
+                        el.scrollTop = Math.min(scrollY, el.scrollHeight - el.clientHeight);
+                    });
+                }
                 if (window.__hideFixedElements) {
                     // y > 0 なら固定要素を隠し、y === 0（トップ）なら表示状態に戻す
                     window.__hideFixedElements(scrollY > 0);
                 }
-            }, y);
+            }, targetY);
 
             // スクロールによるlazy-load、Canvas再描画、動画フレーム更新を待つ
             await new Promise(resolve => setTimeout(resolve, 700));
@@ -294,31 +336,89 @@ function start_web_scrape_handler()
                     });
                 });
             });
-
-            let actualHeight = Math.min(viewportHeight, docHeight - y);
-            actualHeight = Math.max(1, Math.round(actualHeight));
-
-            const image = await page.screenshot({
-                type: 'png',
-                encoding: 'base64',
-                clip: {
-                    x: 0,
-                    y: y,
-                    width: viewportWidth,
-                    height: actualHeight
-                },
-                captureBeyondViewport: false
-            });
-
-            captures.push({
-                y,
-                width: viewportWidth,
-                height: actualHeight,
-                image
-            });
         }
 
-        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.evaluate(() => {
+            window.scrollTo(0, 0);
+            if (window.__getScrollableElements) {
+                window.__getScrollableElements().forEach(el => {
+                    el.scrollTop = 0;
+                });
+            }
+            if (window.__hideFixedElements) {
+                window.__hideFixedElements(false);
+            }
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        await page.evaluate(() => {
+            const style = document.createElement('style');
+            style.textContent = `
+                html, body {
+                    height: auto !important;
+                    min-height: 100% !important;
+                    overflow: visible !important;
+                }
+            `;
+            document.head.appendChild(style);
+
+            if (window.__getScrollableElements) {
+                window.__getScrollableElements().forEach(el => {
+                    if (el === document.documentElement || el === document.body) return;
+
+                    const computed = window.getComputedStyle(el);
+                    if (computed.position === 'fixed') {
+                        el.style.setProperty('position', 'relative', 'important');
+                    }
+                    el.style.setProperty('height', el.scrollHeight + 'px', 'important');
+                    el.style.setProperty('max-height', 'none', 'important');
+                    el.style.setProperty('overflow', 'visible', 'important');
+                    el.style.setProperty('overflow-y', 'visible', 'important');
+                    el.style.setProperty('transform', 'none', 'important');
+                });
+            }
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const finalDocHeight = await page.evaluate(() => {
+            const heights = [
+                document.documentElement ? document.documentElement.scrollHeight : 0,
+                document.documentElement ? document.documentElement.offsetHeight : 0,
+                document.body ? document.body.scrollHeight : 0,
+                document.body ? document.body.offsetHeight : 0,
+                window.innerHeight,
+                1080
+            ];
+
+            document.querySelectorAll('*').forEach(el => {
+                const rect = el.getBoundingClientRect();
+                const bottom = rect.bottom + window.scrollY;
+                if (bottom > 0) {
+                    heights.push(bottom);
+                }
+                if (el.scrollHeight > el.clientHeight + 20) {
+                    heights.push(el.scrollHeight);
+                }
+            });
+
+            return Math.ceil(Math.max(...heights.filter(height => Number.isFinite(height) && height > 0)));
+        });
+
+        const fullPageImage = await page.screenshot({
+            type: 'png',
+            encoding: 'base64',
+            fullPage: true
+        });
+
+        captures.push({
+            y: 0,
+            width: viewportWidth,
+            height: finalDocHeight,
+            image: fullPageImage
+        });
+
         const html = await page.content();
         
         const inlineData = await page.evaluate(() => {
@@ -380,15 +480,27 @@ function start_web_scrape_handler()
     $filepath = $scrape_dir . '/' . $filename;
     $file_url = $upload_dir['url'] . '/' . $filename;
 
-    // 分割された画像をPHP側で結合
+    // 画像の高さを算出（分割撮影の場合は結合キャンバスの高さとして利用）
     $totalHeight = 0;
     $width = 1920;
     foreach ($data['captures'] as $cap) {
-        $totalHeight += $cap['height'];
+        $capY = isset($cap['y']) ? (int) $cap['y'] : 0;
+        $capHeight = isset($cap['height']) ? (int) $cap['height'] : 0;
+        $totalHeight = max($totalHeight, $capY + $capHeight);
+    }
+
+    if ($totalHeight <= 0 || empty($data['captures'])) {
+        wp_send_json_error(['message' => '有効なスクリーンショットが取得できませんでした。']);
     }
 
     try {
-        if (extension_loaded('imagick')) {
+        if (count($data['captures']) === 1 && (int) $data['captures'][0]['y'] === 0) {
+            $image_data = base64_decode($data['captures'][0]['image'], true);
+            if ($image_data === false) {
+                wp_send_json_error(['message' => 'スクリーンショット画像のデコードに失敗しました。']);
+            }
+            file_put_contents($filepath, $image_data);
+        } elseif (extension_loaded('imagick')) {
             $imagick = new Imagick();
             $imagick->newImage($width, $totalHeight, new ImagickPixel('white'));
             $imagick->setImageFormat('png');
@@ -397,7 +509,7 @@ function start_web_scrape_handler()
                 $blob = base64_decode($cap['image']);
                 $tile = new Imagick();
                 $tile->readImageBlob($blob);
-                $imagick->compositeImage($tile, Imagick::COMPOSITE_DEFAULT, 0, $cap['y']);
+                $imagick->compositeImage($tile, Imagick::COMPOSITE_DEFAULT, 0, (int) $cap['y']);
                 $tile->clear();
                 $tile->destroy();
             }
@@ -413,7 +525,7 @@ function start_web_scrape_handler()
                 $blob = base64_decode($cap['image']);
                 $tile = imagecreatefromstring($blob);
                 if ($tile !== false) {
-                    imagecopy($img, $tile, 0, $cap['y'], 0, 0, $cap['width'], $cap['height']);
+                    imagecopy($img, $tile, 0, (int) $cap['y'], 0, 0, (int) $cap['width'], (int) $cap['height']);
                     imagedestroy($tile);
                 }
             }
