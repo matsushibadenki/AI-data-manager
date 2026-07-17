@@ -170,3 +170,61 @@ Knowledge Server登録に失敗する場合は、URL、`/items` エンドポイ�
 - `inc/functions_ai_pipeline.php`：キュー登録、Cron処理、LLM処理、レビュー処理
 - `inc/functions_llm_api.php`：LLMプロバイダとの通信
 - `inc/functions_web_scrape.php`：既存のヘッドレスブラウザ方式スクレイピング
+
+## 11. 概念単位の知識蒸留
+
+URLがない場合でも、パイプライン画面の「概念蒸留 / Concept Distillation / 概念蒸馏」から中心概念を直接入力できます。
+
+例：
+
+```text
+犬
+```
+
+概念蒸留では、まず次の観念カテゴリを展開します。
+
+- 特徴 / Characteristics / 特征
+- 生物分類・構造 / Taxonomy & structure / 生物分类与结构
+- 習性・機能 / Behavior & function / 习性与功能
+- 歴史・変遷 / History / 历史与演变
+- 人間との関係・利用 / Human relationship / 与人类的关系与用途
+- 関連語・周辺概念 / Related terms / 相关词与周边概念
+- 例・具体化 / Examples / 示例与具体化
+- よくある誤解・限界 / Misconceptions / 常见误解与局限
+- 他概念・他生物との比較 / Comparison / 与其他概念或动物比较
+- 推論問題・応用 / Reasoning & application / 推理问题与应用
+
+LLMは概念に不要な枝を除外し、必要な枝を追加・統合します。その後、各枝に2〜3問の質問を作り、各質問について次の3種類の回答候補を生成します。
+
+1. 短い直接回答
+2. 背景・理由を含む説明
+3. 具体例、反例、比較、推論のいずれかを含む応用回答
+
+各回答には `confidence` と `caveats` を付けます。知識が不確実な場合に断定を避け、レビュー時に確認できるようにするためです。
+
+概念蒸留の保存形式は `concept_distillation` です。
+
+```json
+{
+  "format": "concept_distillation",
+  "data": {
+    "concept": "犬",
+    "concept_map": {"branches": []},
+    "branch_questions": {"questions": []},
+    "branch_answers": {"items": []},
+    "knowledge": {"registered": false}
+  }
+}
+```
+
+Knowledge Serverへ送信する場合は、既存の `/items` エンドポイントへ `type: concept_distillation` として登録します。
+
+## 12. ロードマップ
+
+- [Done] 概念マップ生成を実装
+- [Done] 観念カテゴリごとの質問生成を実装
+- [Done] 質問ごとの複数回答候補を実装
+- [Done] Knowledge Server登録とレビュー待ちを実装
+- [Next] 概念ごとの回答品質スコアリングと重複除去
+- [Later] 概念グラフの可視化・編集UI
+- [Later] 複数LLMによる回答比較と投票
