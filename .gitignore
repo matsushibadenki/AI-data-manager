@@ -19,6 +19,11 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
 # WordPress specific (optional for theme-only repository)
 # Ignore logs and uploads if they ever get created here by mistake
 *.log

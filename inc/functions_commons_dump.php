@@ -35,7 +35,7 @@ function start_commons_dump_process_handler()
         }
 
         $status_file = $commons_dir . '/commons_import_status.json';
-        $script_path = get_template_directory() . '/process_commons_dump.py';
+        $script_path = get_template_directory() . '/scripts/process_commons_dump.py';
         $log_file = $commons_dir . '/worker.log';
 
         // 初期ステータス書き込み

@@ -9,7 +9,7 @@ import urllib.parse
 from datetime import datetime
 
 # urlパス、ファイル名、内容のコメントを追加するルール対応
-# URLパス: /Users/Shared/Docker/AI-data-manager-docker/www/html/wordpress/wp-content/themes/AI-data-manager/process_commons_dump.py
+# URLパス: /Users/Shared/Docker/AI-data-manager-docker/www/html/wordpress/wp-content/themes/AI-data-manager/scripts/process_commons_dump.py
 # ファイル名: process_commons_dump.py
 # コードの内容の説明: Wikimedia CommonsのJSONダンプ(mediainfo)をストリーミングで読み込み、画像URLとメタデータを抽出して分割保存するワーカー
 

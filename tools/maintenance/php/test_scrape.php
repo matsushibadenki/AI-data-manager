@@ -146,8 +146,9 @@ $data = json_decode($body, true);
 
 if (isset($data['screenshot'])) {
     $image_data = base64_decode($data['screenshot']);
-    file_put_contents('test_scrape.png', $image_data);
-    echo "Screenshot saved to test_scrape.png\n";
+    $output_path = __DIR__ . '/../../tests/fixtures/test_scrape.png';
+    file_put_contents($output_path, $image_data);
+    echo "Screenshot saved to {$output_path}\n";
 } else {
     echo "No screenshot found in response.\n";
     print_r($data);

@@ -6,22 +6,12 @@ $js_code = "
 module.exports = async ({ page, context }) => {
     await page.goto(context.url, { waitUntil: 'networkidle0', timeout: 30000 });
     
-    // Inject CSS to disable hardware acceleration triggers
-    await page.addStyleTag({ content: `
-        * {
-            transform: none !important;
-            perspective: none !important;
-            backface-visibility: visible !important;
-            will-change: auto !important;
-            box-shadow: none !important;
-        }
-    ` });
-
     await page.evaluate(async () => {
         const videos = document.querySelectorAll('video');
         for (let vid of videos) {
             vid.pause();
             
+            // Wait for video to have enough data to seek
             if (vid.readyState < 2) {
                 await new Promise(res => {
                     vid.onloadeddata = res;
@@ -30,22 +20,23 @@ module.exports = async ({ page, context }) => {
                 });
             }
             
+            // Seek and wait for seeked event
             await new Promise(res => {
                 vid.onseeked = res;
                 vid.currentTime = Math.min(2.0, vid.duration / 2 || 1.0);
-                setTimeout(res, 3000);
+                setTimeout(res, 3000); // timeout
             });
             
-            // Try to draw to canvas again
+            // Create canvas and draw video
             const canvas = document.createElement('canvas');
             canvas.width = vid.videoWidth || 1920;
             canvas.height = vid.videoHeight || 1080;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
             
+            // Replace video with image
             const img = document.createElement('img');
             img.src = canvas.toDataURL('image/jpeg');
-            // We removed transforms, so we might need to manually center it or just replace it
             img.style.cssText = vid.style.cssText;
             img.className = vid.className;
             vid.parentNode.replaceChild(img, vid);
@@ -65,8 +56,9 @@ $response = wp_remote_post($browserless_function_url, [
 $body = wp_remote_retrieve_body($response);
 $data = json_decode($body, true);
 if (isset($data['screenshot'])) {
-    file_put_contents('test_scrape_gpu.png', base64_decode($data['screenshot']));
-    echo "Saved to test_scrape_gpu.png\n";
+    $output_path = __DIR__ . '/../../tests/fixtures/test_scrape_canvas2.png';
+    file_put_contents($output_path, base64_decode($data['screenshot']));
+    echo "Saved to {$output_path}\n";
 } else {
     echo "Failed.\n";
 }

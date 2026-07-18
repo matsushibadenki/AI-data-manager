@@ -171,6 +171,23 @@ Knowledge Server登録に失敗する場合は、URL、`/items` エンドポイ�
 - `inc/functions_llm_api.php`：LLMプロバイダとの通信
 - `inc/functions_web_scrape.php`：既存のヘッドレスブラウザ方式スクレイピング
 
+## 10.1. ディレクトリ整理
+
+実行時に必要なWordPressテーマファイルと、開発・保守用スクリプトを分離しています。
+
+- `scripts/`：WordPressから呼び出されるダンプ処理
+- `tools/maintenance/python/`：過去の修正・更新用Pythonスクリプト
+- `tools/maintenance/php/`：手動検証・データ確認用PHPスクリプト
+- `tools/tests/fixtures/`：検証用画像
+- `doc/`：各種マニュアル
+
+保守用Pythonスクリプトを実行する場合は、テーマのルートをカレントディレクトリにしてください。
+
+```bash
+cd /path/to/AI-data-manager
+python tools/maintenance/python/update_import.py
+```
+
 ## 11. 概念単位の知識蒸留
 
 URLがない場合でも、パイプライン画面の「概念蒸留 / Concept Distillation / 概念蒸馏」から中心概念を直接入力できます。

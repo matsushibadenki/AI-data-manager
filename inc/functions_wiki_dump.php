@@ -31,7 +31,7 @@ function start_wiki_dump_process_handler()
         }
 
         $status_file = $wiki_dir . '/wiki_import_status.json';
-        $script_path = get_template_directory() . '/process_wiki_dump.py';
+        $script_path = get_template_directory() . '/scripts/process_wiki_dump.py';
         $log_file = $wiki_dir . '/worker.log';
 
         // 初期ステータス書き込み
