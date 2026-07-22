@@ -64,9 +64,23 @@ get_header();
     border: 1px solid var(--border-subtle, #eee);
     border-radius: var(--radius-lg, 8px);
 }
-.learning-tab-content.active {
-    display: block;
-}
+        .learning-tab-content.active {
+            display: block;
+        }
+        .upload-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        .episode-json {
+            font-family: monospace;
+            min-height: 6rem;
+        }
+        @media (max-width: 700px) {
+            .upload-form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
 .dynamic-row {
     display: flex;
     gap: 1rem;
@@ -465,6 +479,7 @@ button.btn-black span.material-symbols-outlined {
                     <button type="button" class="learning-tab" data-target="tab-dpo">DPO / RLHF</button>
                     <button type="button" class="learning-tab" data-target="tab-frontend">HTML/CSS/JS</button>
                     <button type="button" class="learning-tab" data-target="tab-structured">構造化データ</button>
+                    <button type="button" class="learning-tab" data-target="tab-episode">Episode / 物語構造</button>
                     
                 </div>
 
@@ -570,6 +585,41 @@ button.btn-black span.material-symbols-outlined {
                         <label for="structured-json"><?php echo esc_html__('JSONデータ:', 'fourier'); ?></label>
                         <textarea id="structured-json" class="upload-form-input" rows="10" placeholder='{"key": "value", ...}' style="font-family: monospace;"></textarea>
                         <small style="color: var(--text-secondary);">※有効なJSON形式で入力してください。</small>
+                    </div>
+                </div>
+
+                <!-- 8. Episode / Causal Narrative -->
+                <div id="tab-episode" class="learning-tab-content" data-format="episode">
+                    <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">物語本文と因果構造・反実仮想・影響・抽出原則を分離して保存します。Episode / Causal Narrative / 事件因果叙事。</p>
+                    <div class="upload-form-group">
+                        <label for="episode-schema-version">Schema version</label>
+                        <input id="episode-schema-version" class="upload-form-input" value="1.0" />
+                    </div>
+                    <div class="upload-form-group">
+                        <label for="episode-narrative-text">物語本文 / Narrative text</label>
+                        <textarea id="episode-narrative-text" class="upload-form-input" rows="6" placeholder="人間が読める完全な物語本文"></textarea>
+                    </div>
+                    <div class="upload-form-grid">
+                        <div class="upload-form-group"><label for="episode-setting">初期状況 / Setting</label><textarea id="episode-setting" class="upload-form-input" rows="3"></textarea></div>
+                        <div class="upload-form-group"><label for="episode-initial-state">初期状態 / Initial state</label><textarea id="episode-initial-state" class="upload-form-input" rows="3"></textarea></div>
+                        <div class="upload-form-group"><label for="episode-goal">主体の目的 / Goal</label><textarea id="episode-goal" class="upload-form-input" rows="3"></textarea></div>
+                        <div class="upload-form-group"><label for="episode-outcome">直後の結果 / Outcome</label><textarea id="episode-outcome" class="upload-form-input" rows="3"></textarea></div>
+                        <div class="upload-form-group"><label for="episode-long-term-outcome">長期的な結果 / Long-term outcome</label><textarea id="episode-long-term-outcome" class="upload-form-input" rows="3"></textarea></div>
+                    </div>
+                    <div class="upload-form-group"><label for="episode-events">出来事 / Events (JSON array)</label><textarea id="episode-events" class="upload-form-input episode-json" rows="6" placeholder='[{"event_id":"e1","actor":"主人公","action":"...","intent":"..."}]'>[]</textarea></div>
+                    <div class="upload-form-grid">
+                        <div class="upload-form-group"><label for="episode-agents">登場主体 / Agents (JSON array)</label><textarea id="episode-agents" class="upload-form-input episode-json" rows="5">[]</textarea></div>
+                        <div class="upload-form-group"><label for="episode-causal-relations">因果関係 / Causal relations (JSON array)</label><textarea id="episode-causal-relations" class="upload-form-input episode-json" rows="5">[]</textarea></div>
+                        <div class="upload-form-group"><label for="episode-impact">影響 / Impact (JSON array)</label><textarea id="episode-impact" class="upload-form-input episode-json" rows="5">[]</textarea></div>
+                        <div class="upload-form-group"><label for="episode-alternatives">反実仮想 / Alternatives (JSON array)</label><textarea id="episode-alternatives" class="upload-form-input episode-json" rows="5">[]</textarea></div>
+                        <div class="upload-form-group"><label for="episode-interpretations">抽出原則 / Interpretations (JSON array)</label><textarea id="episode-interpretations" class="upload-form-input episode-json" rows="5">[]</textarea></div>
+                    </div>
+                    <div class="upload-form-group"><label for="episode-observable-facts">検証可能な中間ステップ / Observable reasoning</label><textarea id="episode-observable-facts" class="upload-form-input episode-json" rows="7" placeholder='{"observable_facts":[],"affected_parties":[],"candidate_actions":[],"predicted_effects":[],"answer":""}'>{"observable_facts":[],"affected_parties":[],"candidate_actions":[],"predicted_effects":[],"answer":""}</textarea></div>
+                    <div class="upload-form-grid">
+                        <div class="upload-form-group"><label for="episode-domain">領域 / Domain</label><input id="episode-domain" class="upload-form-input" placeholder="社会行動, 動物福祉" /></div>
+                        <div class="upload-form-group"><label for="episode-themes">テーマ / Themes</label><input id="episode-themes" class="upload-form-input" placeholder="援助, 信頼, 協力" /></div>
+                        <div class="upload-form-group"><label for="episode-source-type">出典種別 / Source type</label><input id="episode-source-type" class="upload-form-input" value="human_authored" /></div>
+                        <div class="upload-form-group"><label for="episode-license">ライセンス / License</label><input id="episode-license" class="upload-form-input" value="original" /></div>
                     </div>
                 </div>
 
@@ -866,6 +916,37 @@ button.btn-black span.material-symbols-outlined {
                     } else {
                         formatData = JSON.parse(jsonStr);
                     }
+                }
+                else if (currentFormat === 'episode') {
+                    const episodeJson = (id, fallback) => {
+                        const value = document.getElementById(id).value.trim();
+                        if (!value) return fallback;
+                        return JSON.parse(value);
+                    };
+                    const splitList = (id) => document.getElementById(id).value.split(',').map(value => value.trim()).filter(Boolean);
+                    formatData = {
+                        schema_version: document.getElementById('episode-schema-version').value.trim() || '1.0',
+                        data_type: 'episode',
+                        episode_id: 'ep_' + Date.now(),
+                        language: document.getElementById('meta-language')?.value || 'ja',
+                        narrative_text: document.getElementById('episode-narrative-text').value,
+                        narrative: {
+                            setting: document.getElementById('episode-setting').value,
+                            initial_state: document.getElementById('episode-initial-state').value,
+                            goal: document.getElementById('episode-goal').value,
+                            events: episodeJson('episode-events', []),
+                            outcome: document.getElementById('episode-outcome').value,
+                            long_term_outcome: document.getElementById('episode-long-term-outcome').value
+                        },
+                        agents: episodeJson('episode-agents', []),
+                        causal_relations: episodeJson('episode-causal-relations', []),
+                        impact: episodeJson('episode-impact', []),
+                        alternatives: episodeJson('episode-alternatives', []),
+                        interpretations: episodeJson('episode-interpretations', []),
+                        observable_reasoning: episodeJson('episode-observable-facts', {}),
+                        annotations: { domain: splitList('episode-domain'), themes: splitList('episode-themes'), review_status: 'pending_review' },
+                        source: { type: document.getElementById('episode-source-type').value, license: document.getElementById('episode-license').value }
+                    };
                 }
             } catch (e) {
                 showStatus('JSONのパースに失敗しました。構造化データの書式を確認してください。', true);

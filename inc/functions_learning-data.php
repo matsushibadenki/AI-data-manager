@@ -8,6 +8,35 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Episode / Causal Narrativeの最低限の構造を検証する。
+ * 自由記述のCoTではなく、観測可能な事実と因果注釈を分離して保存する。
+ */
+function fourier_validate_episode_payload($payload) {
+    if (!is_array($payload) || empty($payload['data']) || !is_array($payload['data'])) {
+        return new WP_Error('invalid_episode', 'Episodeデータのdataがありません。');
+    }
+
+    $data = $payload['data'];
+    if (($data['data_type'] ?? 'episode') !== 'episode') {
+        return new WP_Error('invalid_episode', 'Episodeのdata_typeはepisodeである必要があります。');
+    }
+    if (empty($data['narrative']) || !is_array($data['narrative'])) {
+        return new WP_Error('invalid_episode', 'Episodeにはnarrativeオブジェクトが必要です。');
+    }
+    if (isset($data['narrative']['events']) && !is_array($data['narrative']['events'])) {
+        return new WP_Error('invalid_episode', 'narrative.eventsは配列である必要があります。');
+    }
+
+    foreach (['causal_relations', 'agents', 'impact', 'alternatives', 'interpretations'] as $field) {
+        if (isset($data[$field]) && !is_array($data[$field])) {
+            return new WP_Error('invalid_episode', $field . 'は配列である必要があります。');
+        }
+    }
+
+    return true;
+}
+
 /*--------------------------------------------------------------
   学習データのメタデータを保存する（アップロード/更新/インポート時）
 --------------------------------------------------------------*/
@@ -109,6 +138,14 @@ function frontend_learning_data_update_handler()
 
     if (empty($title) || empty($json_data_str)) {
         wp_send_json_error(['message' => esc_html__('入力が不足しています。', 'fourier')], 400);
+    }
+
+    $decoded_payload = json_decode($json_data_str, true);
+    if (isset($decoded_payload['format']) && $decoded_payload['format'] === 'episode') {
+        $episode_validation = fourier_validate_episode_payload($decoded_payload);
+        if (is_wp_error($episode_validation)) {
+            wp_send_json_error(['message' => $episode_validation->get_error_message()], 400);
+        }
     }
 
     if (json_last_error() !== JSON_ERROR_NONE) {
@@ -320,6 +357,13 @@ function frontend_learning_data_import_execute_handler()
     foreach ($items as $item) {
         $title = isset($item['title']) && $item['title'] !== '' ? sanitize_text_field($item['title']) : esc_html__('インポートデータ', 'fourier') . ' ' . date('Ymd_His');
 
+        if (($item['format'] ?? '') === 'episode') {
+            $episode_validation = fourier_validate_episode_payload(['format' => 'episode', 'data' => $item['data'] ?? []]);
+            if (is_wp_error($episode_validation)) {
+                continue;
+            }
+        }
+
         $post_data = [
             'post_title'   => $title,
             'post_content' => wp_slash(json_encode([
@@ -432,6 +476,8 @@ function _detect_and_format_import_item($raw, $force_format = 'auto')
         $format = 'dpo';
     } else if (isset($check_target['html']) || isset($check_target['css']) || isset($check_target['js'])) {
         $format = 'frontend_code';
+    } else if (($check_target['data_type'] ?? '') === 'episode' || (isset($check_target['narrative']) && isset($check_target['causal_relations']))) {
+        $format = 'episode';
     } else if (isset($check_target['text'])) {
         $keys = array_keys($check_target);
         $allowed = ['text', 'image_base64', 'image_url', 'image_filename'];
@@ -501,6 +547,17 @@ function fourier_format_learning_data($item, $output_style)
                 $text = "### Prompt:\n" . $data['prompt'] . "\n\n### Chosen:\n" . ($data['chosen'] ?? '') . "\n\n### Rejected:\n" . ($data['rejected'] ?? '');
             } elseif ($item['format'] === 'cot' && isset($data['question'])) {
                 $text = "### Question:\n" . $data['question'] . "\n\n### Thought:\n" . ($data['thought'] ?? '') . "\n\n### Answer:\n" . ($data['answer'] ?? '');
+            } elseif ($item['format'] === 'episode') {
+                $text = $data['narrative_text'] ?? '';
+                if (!$text && isset($data['narrative']) && is_array($data['narrative'])) {
+                    $text = implode("\n", array_filter([
+                        $data['narrative']['setting'] ?? '',
+                        $data['narrative']['initial_state'] ?? '',
+                        $data['narrative']['goal'] ?? '',
+                        $data['narrative']['outcome'] ?? '',
+                        $data['narrative']['long_term_outcome'] ?? ''
+                    ]));
+                }
             } else {
                 $text = json_encode($data, JSON_UNESCAPED_UNICODE);
             }
@@ -695,7 +752,8 @@ function frontend_learning_data_statistics_handler()
         'cot' => 0,
         'dpo' => 0,
         'frontend_code' => 0,
-        'structured' => 0
+        'structured' => 0,
+        'episode' => 0
     ];
     $total_chars = 0;
 

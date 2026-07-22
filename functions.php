@@ -571,6 +571,14 @@ function frontend_learning_data_upload_handler()
         wp_send_json_error(array('message' => esc_html__('無効なJSONデータです。', 'fourier')), 400);
     }
 
+    $decoded_array = json_decode($json_data_str, true);
+    if (isset($decoded_array['format']) && $decoded_array['format'] === 'episode') {
+        $episode_validation = fourier_validate_episode_payload($decoded_array);
+        if (is_wp_error($episode_validation)) {
+            wp_send_json_error(array('message' => $episode_validation->get_error_message()), 400);
+        }
+    }
+
     // 投稿の挿入
     $post_data = array(
         'post_title'   => $title,

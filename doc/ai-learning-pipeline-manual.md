@@ -245,3 +245,57 @@ Knowledge Serverへ送信する場合は、既存の `/items` エンドポイン
 - [Next] 概念ごとの回答品質スコアリングと重複除去
 - [Later] 概念グラフの可視化・編集UI
 - [Later] 複数LLMによる回答比較と投票
+
+## 13. Episode / Causal Narrative
+
+物語性を保存するための `episode` 形式を追加しています。これは既存のInstruction、ChatML、DPOを置き換えるものではなく、物語の原典となる中間表現です。
+
+登録画面の「Episode / 物語構造」タブから、次の内容を保存できます。
+
+- 人間が読める物語本文
+- 初期状況、初期状態、主体の目的
+- 出来事と行動意図
+- 直後の結果、長期的な結果
+- 主体、因果関係、複数対象への影響
+- 代替行動と予測結果
+- 抽出原則と確信度
+- 観測可能な中間ステップ
+- 領域、テーマ、出典、ライセンス
+
+保存形式の例です。
+
+```json
+{
+  "format": "episode",
+  "data": {
+    "schema_version": "1.0",
+    "data_type": "episode",
+    "episode_id": "ep_000001",
+    "narrative_text": "雨の日、主人公は道端で猫を見つけた。",
+    "narrative": {
+      "setting": "雨の日の帰り道",
+      "initial_state": "主人公は一人だった",
+      "goal": "猫の安全を確保する",
+      "events": [],
+      "outcome": "猫を保護した",
+      "long_term_outcome": "協力者との信頼が生まれた"
+    },
+    "agents": [],
+    "causal_relations": [],
+    "impact": [],
+    "alternatives": [],
+    "interpretations": [],
+    "observable_reasoning": {
+      "observable_facts": [],
+      "affected_parties": [],
+      "candidate_actions": [],
+      "predicted_effects": [],
+      "answer": ""
+    },
+    "annotations": {"domain": [], "themes": [], "review_status": "pending_review"},
+    "source": {"type": "human_authored", "license": "original"}
+  }
+}
+```
+
+`episode`はJSON / JSONLインポートでも自動判定され、REST APIの`format=episode`フィルタでも取得できます。Transformer形式でエクスポートすると、まず物語本文をテキストとして出力します。

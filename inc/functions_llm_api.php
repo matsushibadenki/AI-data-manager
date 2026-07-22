@@ -846,6 +846,10 @@ function frontend_learning_data_scrape_url_handler()
         case 'plain':
             $format_keys = "`text`";
             break;
+        case 'episode':
+            $format_keys = '`schema_version`, `data_type` (episode), `episode_id`, `narrative_text`, `narrative`, `agents`, `causal_relations`, `impact`, `alternatives`, `interpretations`, `observable_reasoning`, `annotations`, `source`';
+            $user_prompt .= "物語本文と、観測可能な事実・主体・目的・行動・短期結果・長期結果・因果関係・複数対象への影響・反実仮想・抽出原則を分離してください。自由形式の長いCoTは生成せず、observable_reasoningにはobservable_facts、affected_parties、candidate_actions、predicted_effects、answerのみを入れてください。narrative.eventsはevent_id、actor、action、intentを持つ配列にしてください。";
+            break;
     }
     if ($format_keys) {
         $user_prompt .= "【必須のJSONキー】: このフォーマットの配列要素は必ず {$format_keys} というキー名を持たせてください。キー名（question等）は絶対に変更しないでください。\n";
@@ -893,8 +897,15 @@ function frontend_learning_data_scrape_url_handler()
     }
 
     // 単一のオブジェクト（連想配列）の場合は配列にラップする
-    if (is_array($final_data) && !wp_is_numeric_array($final_data)) {
+    if ($target_format !== 'episode' && is_array($final_data) && !wp_is_numeric_array($final_data)) {
         $final_data = [$final_data];
+    }
+
+    if ($target_format === 'episode') {
+        $episode_validation = fourier_validate_episode_payload(['format' => 'episode', 'data' => $final_data]);
+        if (is_wp_error($episode_validation)) {
+            wp_send_json_error(['message' => 'LLMが有効なEpisode構造を返しませんでした: ' . $episode_validation->get_error_message(), 'log' => $llm_raw_text]);
+        }
     }
 
     $payload = [
@@ -994,6 +1005,9 @@ function frontend_learning_data_distill_from_seed_handler()
         $user_prompt .= '{ "question": "...", "thought": "...", "answer": "..." }';
     } elseif ($target_format === 'dpo') {
         $user_prompt .= '{ "prompt": "...", "chosen": "...", "rejected": "..." }';
+    } elseif ($target_format === 'episode') {
+        $user_prompt .= '{ "schema_version": "1.0", "data_type": "episode", "episode_id": "ep_...", "narrative_text": "...", "narrative": { "setting": "...", "initial_state": "...", "goal": "...", "events": [], "outcome": "...", "long_term_outcome": "..." }, "agents": [], "causal_relations": [], "impact": [], "alternatives": [], "interpretations": [], "observable_reasoning": { "observable_facts": [], "affected_parties": [], "candidate_actions": [], "predicted_effects": [], "answer": "" }, "annotations": { "domain": [], "themes": [], "review_status": "pending_review" }, "source": { "type": "derived", "license": "unknown" } }';
+        $user_prompt .= "\n物語の観察事実と人間による解釈を混同しないでください。自由形式の長いCoTは生成せず、検証可能な中間ステップだけを保存してください。";
     } else {
         $user_prompt .= '{ "text": "..." }';
     }
@@ -1026,6 +1040,13 @@ function frontend_learning_data_distill_from_seed_handler()
             $final_data = $parsed_json['data'];
         } elseif (isset($parsed_json[0]) && is_array($parsed_json[0]) && isset($parsed_json[0]['data'])) {
             $final_data = $parsed_json[0]['data'];
+        }
+    }
+
+    if ($target_format === 'episode') {
+        $episode_validation = fourier_validate_episode_payload(['format' => 'episode', 'data' => $final_data]);
+        if (is_wp_error($episode_validation)) {
+            wp_send_json_error(['message' => 'LLMが有効なEpisode構造を返しませんでした: ' . $episode_validation->get_error_message(), 'log' => $llm_raw_text]);
         }
     }
 

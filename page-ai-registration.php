@@ -461,6 +461,7 @@ button.btn-black span.material-symbols-outlined {
                             <option value="chatml">ChatML (会話形式)</option>
                             <option value="cot">CoT (思考過程付き)</option>
                             <option value="dpo">DPO / RLHF (比較データ)</option>
+                            <option value="episode">Episode / Causal Narrative (物語・因果構造)</option>
                             <option value="plain">プレーンテキスト要約</option>
                         </select>
                     </div>
@@ -511,6 +512,7 @@ button.btn-black span.material-symbols-outlined {
                             <option value="chatml">ChatML (会話形式)</option>
                             <option value="cot">CoT (思考過程付き)</option>
                             <option value="dpo">DPO / RLHF (比較データ)</option>
+                            <option value="episode">Episode / Causal Narrative (物語・因果構造)</option>
                             <option value="plain">プレーンテキスト</option>
                         </select>
                     </div>

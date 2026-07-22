@@ -53,7 +53,8 @@ $grouped_data = [
     'cot' => [],
     'dpo' => [],
     'frontend_code' => [],
-    'structured' => []
+    'structured' => [],
+    'episode' => []
 ];
 
 if ($is_authenticated) {
@@ -432,6 +433,7 @@ get_header();
                     <button type="button" class="learning-tab" data-target="tab-dpo">DPO / RLHF (<?php echo count($grouped_data['dpo']); ?>)</button>
                     <button type="button" class="learning-tab" data-target="tab-frontend">HTML/CSS/JS (<?php echo count($grouped_data['frontend_code']); ?>)</button>
                     <button type="button" class="learning-tab" data-target="tab-structured">構造化データ (<?php echo count($grouped_data['structured']); ?>)</button>
+                    <button type="button" class="learning-tab" data-target="tab-episode">Episode / 物語 (<?php echo count($grouped_data['episode']); ?>)</button>
                 </div>
 
                 <!-- 1. プレーンテキスト -->
@@ -738,6 +740,24 @@ get_header();
                                     <td colspan="4" style="text-align:center;">データがありません</td>
                                 </tr>
                             <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 8. Episode / Causal Narrative -->
+                <div id="tab-episode" class="learning-tab-content">
+                    <table class="data-sheet">
+                        <thead><tr><th class="col-id">ID</th><th class="col-date">登録日時</th><th class="col-title">タイトル</th><th>Episode JSON</th></tr></thead>
+                        <tbody>
+                            <?php foreach ($grouped_data['episode'] as $item): ?>
+                                <tr>
+                                    <td><?php echo esc_html($item['id']); ?></td>
+                                    <td><?php echo esc_html($item['date']); ?></td>
+                                    <td><?php echo esc_html($item['title']); ?></td>
+                                    <td><pre><?php echo esc_html(json_encode($item['data'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)); ?></pre></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($grouped_data['episode'])): ?><tr><td colspan="4" style="text-align:center;">データがありません</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

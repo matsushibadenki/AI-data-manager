@@ -10,7 +10,7 @@ Sara-engine（https://github.com/matsushibadenki/sara-engine-project）に最適
 1. **WordPressの強力なCMS機能をデータ管理に転用**
    既存のデータベース（投稿機能やメタデータ）とユーザー認証システムをそのまま活用し、テキストデータや画像データ、それらに紐づく複雑なメタデータ（JSON等）を効率的に管理します。
 2. **多様なAI学習フォーマットへの対応**
-   単純なプレーンテキストから、Instruction（指示・入力・出力）、ChatML、ShareGPT、Chain-of-Thought（CoT）、DPO / RLHF用フォーマットに至るまで、最新のLLM学習トレンドに合わせた様々なフォーマットでの登録・管理をサポートします。
+   単純なプレーンテキストから、Instruction（指示・入力・出力）、ChatML、ShareGPT、Chain-of-Thought（CoT）、DPO / RLHF用フォーマット、Episode / Causal Narrative（物語・因果構造）に至るまで、様々なフォーマットでの登録・管理をサポートします。
 3. **データ拡張（Augmentation）と蒸留（Distillation）の内製化**
    OpenAI、Google Gemini、およびローカル環境のLLM（Ollama, Llama.cpp等）のAPIと連携。既存のデータから自動的にバリエーションを生成したり、プレーンテキストからQ&Aペアを抽出・精製（データ蒸留）する機能を有しています。
 4. **学習パイプラインとのシームレスな統合**
@@ -22,6 +22,7 @@ Sara-engine（https://github.com/matsushibadenki/sara-engine-project）に最適
 
 - **ダッシュボード**: 登録されたデータ数やトークン数（概算）などの統計情報をグラフで可視化します。
 - **データの一覧・個別登録**: 構造化されたデータをフォーマット別にタブで一覧表示。個別画面からの入力・編集も直感的です。
+- **Episode / Causal Narrative**: 物語本文、主体、目的、行動、因果関係、短期・長期結果、影響、反実仮想、抽出原則を原典JSONとして保存できます。保存したEpisodeは後からInstruction、ChatML、DPOなどへ変換しやすい構造です。
 - **URLスクレイピング・自動データ生成**: Wikipediaやブログ記事などのURLを指定するだけで、自動的にWebページのテキストを抽出し、LLMを活用して指定されたフォーマット（QA形式など）の学習データを生成・一括登録します。
 - **バリエーション自動生成・データ蒸留**: ボタンひとつで強力なLLMへリクエストを送り、データを高品質に書き換えたり、CoT（思考プロセス）を自動付与します。
 - **外部連携用 REST API**: Bearerトークン認証による安全なデータフェッチエンドポイントを備えています。
