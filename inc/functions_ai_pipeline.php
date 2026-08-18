@@ -234,7 +234,7 @@ function fourier_pipeline_ajax_review() {
     $id = absint($_POST['post_id'] ?? 0);
     if (!$id || !current_user_can('edit_post', $id)) wp_send_json_error(['message' => '権限がありません。'], 403);
     $decision = sanitize_key($_POST['decision'] ?? '');
-    if ($decision === 'approve') { wp_update_post(['ID' => $id, 'post_status' => 'publish']); update_post_meta($id, '_fourier_pipeline_review', 'approved'); }
+    if ($decision === 'approve') { wp_update_post(['ID' => $id, 'post_status' => 'publish']); update_post_meta($id, '_fourier_pipeline_review', 'approved'); fourier_pipeline_update($id, 'review', 'approved', 'レビューで承認されました。'); }
     elseif ($decision === 'reject') { update_post_meta($id, '_fourier_pipeline_review', 'rejected'); fourier_pipeline_update($id, 'review', 'rejected', 'レビューで差し戻されました。'); }
     else wp_send_json_error(['message' => '不正な操作です。']);
     wp_send_json_success(['message' => 'レビュー結果を保存しました。']);

@@ -701,3 +701,4 @@ require_once get_template_directory() . '/inc/functions_wiki_dump.php';
 require_once get_template_directory() . '/inc/functions_commons_dump.php';
 require_once get_template_directory() . '/inc/functions_web_scrape.php';
 require_once get_template_directory() . '/inc/functions_ai_pipeline.php';
+require_once get_template_directory() . '/inc/functions_auto_distillation.php';
