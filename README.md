@@ -1,6 +1,6 @@
 # AI Data Manager (WordPress Theme)
 
-![WordPressを「LLM（大規模言語モデル）の学習データ管理・アノテーションツール」へと進化させる、特化型のWordPressテーマです。](doc/readme/AI-data-manager-image.png)
+![WordPressを「LLM（大規模言語モデル）の学習データ管理・アノテーションツール」へと進化させる、特化型のWordPressテーマです。](doc/readme/AI-data-manager-img.png)
 
 WordPressを「LLM（大規模言語モデル）の学習データ管理・アノテーションツール」へと進化させる、特化型のWordPressテーマです。
 Sara-engine（https://github.com/matsushibadenki/sara-engine-project）に最適化されています。  
