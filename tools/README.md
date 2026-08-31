@@ -20,6 +20,10 @@ This directory contains helper scripts that are not loaded directly by the WordP
   - 手動スクレイピング検証で生成・参照する画像
   - Images generated or referenced by manual scraping diagnostics
   - 手动抓取诊断生成或引用的图像
+- `tests/php/`
+  - WordPressを読み込んで実行するPHPスモークテスト
+  - PHP smoke tests that bootstrap WordPress
+  - 加载WordPress后运行的PHP冒烟测试
 
 ## 実行時に必要なスクリプト / Runtime scripts / 运行时脚本
 
@@ -43,6 +47,18 @@ Run legacy maintenance scripts with the theme root as the current working direct
 ```bash
 cd /path/to/AI-data-manager
 python tools/maintenance/python/update_import.py
+```
+
+概念回答の品質評価と意味的重複除去は、Dockerのアプリコンテナ内で確認できます。
+
+```bash
+php wp-content/themes/AI-data-manager/tools/tests/php/test_concept_quality.php
+```
+
+複数LLM審査の正規化、重み付き合議、モデル別傾向集計、合議回答の採用、選択的な回答再蒸留、非同期ジョブ遷移は、外部APIを呼ばないモック結果で確認できます。
+
+```bash
+php wp-content/themes/AI-data-manager/tools/tests/php/test_concept_multi_judge.php
 ```
 
 移動に伴い、WordPress側のダンプ処理参照先と、検証画像の出力先は更新済みです。

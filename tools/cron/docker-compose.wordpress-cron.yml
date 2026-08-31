@@ -1,0 +1,12 @@
+services:
+  wordpress-cron:
+    image: ai-data-manager-docker-app:latest
+    container_name: AI-data-manager_wordpress_cron
+    restart: unless-stopped
+    depends_on:
+      - app
+    command: >-
+      sh -c 'while true; do
+        curl -fsS --max-time 900 "http://app/wordpress/wp-cron.php?doing_wp_cron" >/dev/null 2>&1 &
+        sleep 60;
+      done'

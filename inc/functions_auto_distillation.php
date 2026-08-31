@@ -12,6 +12,70 @@ add_action('init', function () {
         'show_ui' => false,
         'supports' => ['title', 'author'],
     ]);
+
+    if (!wp_next_scheduled('fourier_auto_distillation_watchdog')) {
+        wp_schedule_event(time(), 'fourier_every_minute', 'fourier_auto_distillation_watchdog');
+    }
+});
+
+add_filter('cron_schedules', function ($schedules) {
+    if (!isset($schedules['fourier_every_minute'])) {
+        $schedules['fourier_every_minute'] = [
+            'interval' => MINUTE_IN_SECONDS,
+            'display' => 'Every minute (AI Data Manager)',
+        ];
+    }
+    return $schedules;
+});
+
+/** 常駐Cron Runnerの最終実行時刻をUI向けのヘルス情報へ変換する。 */
+function fourier_auto_distill_runner_status() {
+    $heartbeat = (int) get_option('fourier_auto_cron_heartbeat', 0);
+    $age = $heartbeat ? max(0, time() - $heartbeat) : null;
+    $health = 'unknown';
+    if ($age !== null && $age <= 150) {
+        $health = 'active';
+    } elseif ($age !== null && $age <= 300) {
+        $health = 'delayed';
+    } elseif ($age !== null) {
+        $health = 'offline';
+    }
+    return [
+        'health' => $health,
+        'heartbeat' => $heartbeat ? wp_date('Y-m-d H:i:s', $heartbeat) : '',
+        'age_seconds' => $age,
+        'wp_cron_disabled' => defined('DISABLE_WP_CRON') && DISABLE_WP_CRON,
+    ];
+}
+
+/** 1分ごとにRunnerの生存記録を更新し、消失した自動蒸留予約を復旧する。 */
+add_action('fourier_auto_distillation_watchdog', function () {
+    update_option('fourier_auto_cron_heartbeat', time(), false);
+    $jobs = get_posts([
+        'post_type' => 'fourier_distill_job',
+        'post_status' => 'publish',
+        'posts_per_page' => 20,
+        'orderby' => 'date',
+        'order' => 'ASC',
+        'meta_query' => [[
+            'key' => '_fourier_auto_status',
+            'value' => 'running',
+        ]],
+    ]);
+    foreach ($jobs as $job) {
+        $job_id = (int) $job->ID;
+        if (get_transient('fourier_auto_distill_lock_' . $job_id)) continue;
+        $args = [$job_id];
+        $scheduled = wp_next_scheduled('fourier_auto_distillation_tick', $args);
+        if (!$scheduled) {
+            fourier_auto_distill_schedule($job_id, 0);
+            update_post_meta($job_id, '_fourier_auto_phase', 'queued');
+            update_post_meta($job_id, '_fourier_auto_updated', current_time('mysql'));
+            fourier_auto_distill_log($job_id, 'recovery', 'Cron Watchdogが消失した実行予約を復旧しました。');
+        } else {
+            update_post_meta($job_id, '_fourier_auto_next_run', $scheduled);
+        }
+    }
 });
 
 function fourier_auto_distill_allowed_formats() {
@@ -455,34 +519,45 @@ add_action('wp_ajax_fourier_auto_distill_status', function () {
     $job_id = absint($_POST['job_id'] ?? 0);
     $job = $job_id ? get_post($job_id) : fourier_auto_distill_user_job(get_current_user_id(), false);
     if (!$job || $job->post_type !== 'fourier_distill_job' || (int) $job->post_author !== get_current_user_id()) {
-        wp_send_json_success(['job' => null]);
+        wp_send_json_success(['job' => null, 'runner' => fourier_auto_distill_runner_status()]);
     }
     $status = get_post_meta($job->ID, '_fourier_auto_status', true);
+    $phase = get_post_meta($job->ID, '_fourier_auto_phase', true);
     $event_args = [(int) $job->ID];
-    if ($status === 'running' && !wp_next_scheduled('fourier_auto_distillation_tick', $event_args) && !get_transient('fourier_auto_distill_lock_' . $job->ID)) {
+    $lock_key = 'fourier_auto_distill_lock_' . $job->ID;
+    $is_locked = (bool) get_transient($lock_key);
+    if ($status === 'running' && !wp_next_scheduled('fourier_auto_distillation_tick', $event_args) && !$is_locked) {
         fourier_auto_distill_schedule($job->ID, 0);
     }
     $next = (int) get_post_meta($job->ID, '_fourier_auto_next_run', true);
-    if ($status === 'running' && $next && $next <= time() && !get_transient('fourier_auto_distill_lock_' . $job->ID)) {
+    if ($status === 'running' && $next && $next <= time() && !$is_locked) {
+        // 期限超過かつワーカー未実行なら「生成中」と誤表示せず、再起動待機として扱う。
+        $phase = 'queued';
+        update_post_meta($job->ID, '_fourier_auto_phase', $phase);
+        update_post_meta($job->ID, '_fourier_auto_updated', current_time('mysql'));
         fourier_auto_distill_dispatch_cron();
     }
     $include_logs = isset($_POST['include_logs']) && sanitize_text_field(wp_unslash($_POST['include_logs'])) === '1';
     $logs = $include_logs ? get_post_meta($job->ID, '_fourier_auto_logs', true) : [];
-    wp_send_json_success(['job' => [
-        'id' => $job->ID,
-        'title' => $job->post_title,
-        'status' => $status,
-        'phase' => get_post_meta($job->ID, '_fourier_auto_phase', true),
-        'iterations' => (int) get_post_meta($job->ID, '_fourier_auto_iterations', true),
-        'generated' => (int) get_post_meta($job->ID, '_fourier_auto_generated', true),
-        'duplicates' => (int) get_post_meta($job->ID, '_fourier_auto_duplicates', true),
-        'invalid' => (int) get_post_meta($job->ID, '_fourier_auto_invalid', true),
-        'errors' => (int) get_post_meta($job->ID, '_fourier_auto_total_errors', true),
-        'last_error' => get_post_meta($job->ID, '_fourier_auto_last_error', true),
-        'started' => get_post_meta($job->ID, '_fourier_auto_started', true),
-        'stopped' => get_post_meta($job->ID, '_fourier_auto_stopped', true),
-        'updated' => get_post_meta($job->ID, '_fourier_auto_updated', true),
-        'next_run' => $next ? wp_date('Y-m-d H:i:s', $next) : '',
-        'logs' => $include_logs && is_array($logs) ? array_slice($logs, -20) : null,
-    ]]);
+    wp_send_json_success([
+        'runner' => fourier_auto_distill_runner_status(),
+        'job' => [
+            'id' => $job->ID,
+            'title' => $job->post_title,
+            'status' => $status,
+            'phase' => $phase,
+            'runtime_state' => $status === 'running' && $is_locked ? 'generating' : $phase,
+            'iterations' => (int) get_post_meta($job->ID, '_fourier_auto_iterations', true),
+            'generated' => (int) get_post_meta($job->ID, '_fourier_auto_generated', true),
+            'duplicates' => (int) get_post_meta($job->ID, '_fourier_auto_duplicates', true),
+            'invalid' => (int) get_post_meta($job->ID, '_fourier_auto_invalid', true),
+            'errors' => (int) get_post_meta($job->ID, '_fourier_auto_total_errors', true),
+            'last_error' => get_post_meta($job->ID, '_fourier_auto_last_error', true),
+            'started' => get_post_meta($job->ID, '_fourier_auto_started', true),
+            'stopped' => get_post_meta($job->ID, '_fourier_auto_stopped', true),
+            'updated' => get_post_meta($job->ID, '_fourier_auto_updated', true),
+            'next_run' => $next ? wp_date('Y-m-d H:i:s', $next) : '',
+            'logs' => $include_logs && is_array($logs) ? array_slice($logs, -20) : null,
+        ],
+    ]);
 });

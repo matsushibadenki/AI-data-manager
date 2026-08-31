@@ -177,6 +177,38 @@ get_header();
     color: var(--text-secondary, #666);
     font-size: 0.82rem;
 }
+.auto-runner-health {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    flex-basis: 100%;
+    gap: 0.45rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--border-subtle, #ddd);
+    color: var(--text-secondary, #666);
+    font-size: 0.8rem;
+}
+.auto-runner-health::before {
+    grid-column: 1;
+    grid-row: 1;
+    width: 0.55rem;
+    height: 0.55rem;
+    margin-top: 0.3em;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: #8b949e;
+    content: '';
+}
+.auto-runner-main,
+.auto-runner-heartbeat {
+    grid-column: 2;
+    min-width: 0;
+    line-height: 1.5;
+}
+.auto-runner-heartbeat { grid-row: 2; }
+.auto-runner-health.is-active::before { background: #16a34a; }
+.auto-runner-health.is-delayed::before { background: #d97706; }
+.auto-runner-health.is-offline::before { background: #dc2626; }
 .auto-action-notice {
     margin: 0 0 1rem;
     padding: 0.8rem 1rem;
@@ -699,6 +731,7 @@ button.btn-black span.material-symbols-outlined {
                         <div class="auto-runtime-card" aria-live="polite">
                             <span id="auto-runtime-badge" class="auto-runtime-badge is-idle"><span class="auto-runtime-dot" aria-hidden="true"></span><span id="auto-runtime-label"><?php echo esc_html($ai_registration_text('停止中', 'Stopped', '已停止')); ?></span></span>
                             <span id="auto-runtime-detail" class="auto-runtime-detail"><?php echo esc_html($ai_registration_text('実行中のジョブはありません。', 'There is no running job.', '当前没有运行中的任务。')); ?></span>
+                            <span id="auto-cron-health" class="auto-runner-health is-unknown"><span class="auto-runner-main"><?php echo esc_html($ai_registration_text('Cron Runnerを確認しています…', 'Checking the Cron Runner…', '正在检查 Cron Runner…')); ?></span></span>
                         </div>
                         <div id="auto-action-notice" class="auto-action-notice" role="status" hidden></div>
                         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem;">
@@ -734,6 +767,7 @@ button.btn-black span.material-symbols-outlined {
     </div>
 </main>
 
+<?php if ($is_authenticated) : ?>
 <script>
     function handleAjaxSuccess(response) {
         if (response.success) {
@@ -802,6 +836,16 @@ button.btn-black span.material-symbols-outlined {
             'nextRun' => $ai_registration_text('次回実行', 'Next run', '下次执行'),
             'lastError' => $ai_registration_text('直近エラー', 'Latest error', '最近错误'),
             'job' => $ai_registration_text('ジョブ', 'Job', '任务'),
+            'startedAt' => $ai_registration_text('開始', 'Started', '开始'),
+            'lastUpdate' => $ai_registration_text('最終更新', 'Last update', '最后更新'),
+            'cronRunner' => $ai_registration_text('Cron Runner', 'Cron Runner', 'Cron Runner'),
+            'lastHeartbeat' => $ai_registration_text('最終ハートビート', 'Last heartbeat', '最后心跳'),
+            'runnerHealth' => [
+                'active' => $ai_registration_text('稼働中', 'Active', '运行中'),
+                'delayed' => $ai_registration_text('遅延', 'Delayed', '延迟'),
+                'offline' => $ai_registration_text('停止または未到達', 'Offline or unreachable', '已停止或无法访问'),
+                'unknown' => $ai_registration_text('未確認', 'Not confirmed', '未确认'),
+            ],
             'noLogs' => $ai_registration_text('まだ自動蒸留ログはありません。', 'No automatic distillation logs yet.', '尚无自动蒸馏日志。'),
             'noRunningJob' => $ai_registration_text('実行中のジョブはありません。', 'There is no running job.', '当前没有运行中的任务。'),
             'operationStarting' => $ai_registration_text('開始要求を送信しています。', 'Sending the start request.', '正在发送启动请求。'),
@@ -856,10 +900,9 @@ button.btn-black span.material-symbols-outlined {
                 targetContent.hidden = false;
                 currentFormat = targetContent.getAttribute('data-format');
 
-                if (currentFormat === 'scrape') {
-                    document.getElementById('btn-save-data').parentElement.style.display = 'none';
-                } else {
-                    document.getElementById('btn-save-data').parentElement.style.display = 'block';
+                const saveButton = document.getElementById('btn-save-data');
+                if (saveButton?.parentElement) {
+                    saveButton.parentElement.style.display = currentFormat === 'scrape' ? 'none' : 'block';
                 }
             });
             tab.addEventListener('keydown', event => {
@@ -1059,6 +1102,7 @@ button.btn-black span.material-symbols-outlined {
         const autoRuntimeBadge = document.getElementById('auto-runtime-badge');
         const autoRuntimeLabel = document.getElementById('auto-runtime-label');
         const autoRuntimeDetail = document.getElementById('auto-runtime-detail');
+        const autoCronHealth = document.getElementById('auto-cron-health');
         const autoActionNotice = document.getElementById('auto-action-notice');
         let autoStatusTimer = null;
 
@@ -1072,6 +1116,22 @@ button.btn-black span.material-symbols-outlined {
             autoActionNotice.hidden = false;
             autoActionNotice.className = 'auto-action-notice is-' + type;
             autoActionNotice.textContent = message;
+        }
+
+        function renderAutoDistillRunner(runner) {
+            const health = runner?.health || 'unknown';
+            const healthLabel = autoDistillI18n.runnerHealth[health] || autoDistillI18n.runnerHealth.unknown;
+            const summary = document.createElement('span');
+            summary.className = 'auto-runner-main';
+            summary.textContent = autoDistillI18n.cronRunner + ': ' + healthLabel;
+            autoCronHealth.className = 'auto-runner-health is-' + health;
+            autoCronHealth.replaceChildren(summary);
+            if (runner?.heartbeat) {
+                const heartbeat = document.createElement('span');
+                heartbeat.className = 'auto-runner-heartbeat';
+                heartbeat.textContent = autoDistillI18n.lastHeartbeat + ': ' + runner.heartbeat;
+                autoCronHealth.appendChild(heartbeat);
+            }
         }
 
         function resetAutoStartButton() {
@@ -1111,11 +1171,12 @@ button.btn-black span.material-symbols-outlined {
             autoStartButton.textContent = running ? autoDistillI18n.restartLabel : autoDistillI18n.startLabel;
             autoStopButton.disabled = !running;
             resetAutoStartButton();
-            const runtimeState = job.status === 'error' ? 'error' : (job.phase || (running ? 'running' : 'stopped'));
+            const runtimeState = job.status === 'error' ? 'error' : (job.runtime_state || job.phase || (running ? 'running' : 'stopped'));
             const runtimeLabel = autoDistillI18n.phaseLabel[runtimeState] || autoDistillI18n.status[job.status] || job.status;
             const runtimeDetails = [
                 autoDistillI18n.job + ' #' + job.id,
-                job.started ? job.started : '',
+                job.started ? autoDistillI18n.startedAt + ': ' + job.started : '',
+                job.updated ? autoDistillI18n.lastUpdate + ': ' + job.updated : '',
                 job.next_run ? autoDistillI18n.nextRun + ': ' + job.next_run : ''
             ].filter(Boolean).join(' ・ ');
             setAutoRuntimeState(runtimeState, runtimeLabel, runtimeDetails);
@@ -1154,6 +1215,7 @@ button.btn-black span.material-symbols-outlined {
             autoDistillRequest('fourier_auto_distill_status', statusValues)
                 .then(response => {
                     if (!response.success) return;
+                    renderAutoDistillRunner(response.data.runner);
                     const job = response.data.job;
                     renderAutoDistillJob(job);
                     if (job && job.status === 'running') {
@@ -1250,7 +1312,8 @@ button.btn-black span.material-symbols-outlined {
         refreshAutoDistillStatus();
 
         // 検索処理
-        document.getElementById('btn-search').addEventListener('click', function() {
+        const searchButton = document.getElementById('btn-search');
+        if (searchButton) searchButton.addEventListener('click', function() {
             const keyword = document.getElementById('search-keyword').value.trim();
             const resultsContainer = document.getElementById('search-results');
             
@@ -1578,6 +1641,7 @@ button.btn-black span.material-symbols-outlined {
         }
     });
 </script>
+<?php endif; ?>
 
 <?php
 get_footer();
