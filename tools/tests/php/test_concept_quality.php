@@ -51,6 +51,31 @@ if ($custom['minimum_score'] !== 95 || $custom['duplicate_similarity'] !== 0.6) 
 $angles = fourier_concept_sanitize_question_angles("比較\n比較\n 応用 ");
 if ($angles !== ['比較', '応用']) $failures[] = 'question angles must be trimmed and deduplicated';
 
+$training_value = fourier_concept_build_training_value('犬', ['branches' => [
+    ['id' => 'characteristics', 'label' => '特徴', 'priority' => 1, 'question_angles' => ['嗅覚'], 'enabled' => true],
+    ['id' => 'reasoning', 'label' => '推論', 'priority' => 2, 'question_angles' => ['条件推論'], 'enabled' => true],
+]], $questions, $result, ['source_id' => 'pipeline-test', 'provider' => 'openai', 'pipeline_post_id' => 123]);
+if (($training_value['summary']['concept_coverage'] ?? 0) !== 50.0) $failures[] = 'one of two active branches must produce 50% concept coverage';
+if (empty($training_value['samples'][0]['lineage']['sample_id'])) $failures[] = 'training samples must have stable lineage IDs';
+if (($training_value['provenance']['source_id'] ?? '') !== 'pipeline-test') $failures[] = 'training value must preserve source provenance';
+if (($training_value['coverage_gaps'][0]['branch_id'] ?? '') !== 'reasoning') $failures[] = 'the empty reasoning branch must be the first coverage gap';
+if (!isset($training_value['samples'][0]['information_gain'], $training_value['samples'][0]['training_eligibility'])) $failures[] = 'samples must expose information gain and training eligibility';
+if ((fourier_concept_difficulty('reasoning', 'もし条件が変わったならどうなりますか？')['level'] ?? 0) < 5) $failures[] = 'counterfactual questions must receive curriculum level 5 or higher';
+
+$conflict_quality = ['items' => [[
+    'question_id' => 'dog-claim-1', 'branch_id' => 'characteristics', 'question' => '犬は哺乳類ですか？',
+    'accepted_variants' => [
+        ['variant_id' => 'dog-claim-1-v1', 'answer' => '犬は哺乳類です。', 'quality_score' => 90, 'confidence' => 0.9, 'review_status' => 'accepted'],
+        ['variant_id' => 'dog-claim-1-v2', 'answer' => '犬は哺乳類ではないです。', 'quality_score' => 85, 'confidence' => 0.8, 'review_status' => 'accepted'],
+    ],
+    'rejected_variants' => [],
+]]];
+$conflict_value = fourier_concept_build_training_value('犬', ['branches' => [['id' => 'characteristics', 'label' => '特徴']]], ['questions' => [[
+    'question_id' => 'dog-claim-1', 'branch_id' => 'characteristics', 'question' => '犬は哺乳類ですか？',
+]]], $conflict_quality);
+if (($conflict_value['summary']['conflict_samples'] ?? 0) !== 2) $failures[] = 'opposite-polarity similar claims must be preserved as possible conflicts';
+if (($conflict_value['samples'][0]['training_eligibility'] ?? '') !== 'review_required') $failures[] = 'possible conflicts must require human review';
+
 $graph_test_id = wp_insert_post(['post_title' => 'Concept graph smoke test', 'post_status' => 'pending', 'post_type' => 'post']);
 if (is_wp_error($graph_test_id) || !$graph_test_id) {
     $failures[] = 'temporary concept graph post could not be created';
@@ -71,6 +96,9 @@ if (is_wp_error($graph_test_id) || !$graph_test_id) {
         'knowledge' => ['registered' => true],
     ]);
     fourier_concept_apply_quality_evaluation($graph_test_id, ['profile' => 'balanced']);
+    $initial_training_value = get_post_meta($graph_test_id, '_fourier_pipeline_data', true)['training_value'] ?? [];
+    if (empty($initial_training_value['provenance']['knowledge_id'])) $failures[] = 'quality evaluation must persist training value and provenance';
+    if (get_post_meta($graph_test_id, '_fourier_concept_training_value', true) === '') $failures[] = 'training value summary must be queryable through post meta';
     $graph_result = fourier_concept_save_graph_branch($graph_test_id, [
         'mode' => 'update',
         'branch_id' => 'characteristics',

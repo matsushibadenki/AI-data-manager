@@ -357,6 +357,205 @@ function fourier_concept_evaluate_answers($concept, $branch_questions, $branch_a
     ];
 }
 
+/** LLMの表記揺れを吸収し、確信度を0〜100へ正規化します。 */
+function fourier_concept_confidence_percent($confidence) {
+    if (is_numeric($confidence)) {
+        $value = (float) $confidence;
+        if ($value <= 1) $value *= 100;
+        return max(0, min(100, (int) round($value)));
+    }
+    $value = function_exists('mb_strtolower') ? mb_strtolower(trim((string) $confidence), 'UTF-8') : strtolower(trim((string) $confidence));
+    if ($value === '') return 50;
+    if (preg_match('/high|高|strong|確実|可靠|高置信/u', $value)) return 90;
+    if (preg_match('/low|低|weak|不確実|不确定/u', $value)) return 35;
+    return 65;
+}
+
+/** 質問の認知的な難しさを、カリキュラム用の1〜7段階へ割り当てます。 */
+function fourier_concept_difficulty($branch_id, $question, $answer = '') {
+    $text = (string) $question . ' ' . (string) $answer;
+    $level = [
+        'characteristics' => 1, 'taxonomy' => 1, 'related_terms' => 2, 'examples' => 2,
+        'behavior' => 2, 'history' => 2, 'human_relation' => 2, 'comparison' => 3,
+        'misconceptions' => 4, 'reasoning' => 4,
+    ][sanitize_key($branch_id)] ?? 2;
+    if (preg_match('/因果|原因|結果|なぜ|causal|cause|why|因果|为什么/u', $text)) $level = max($level, 4);
+    if (preg_match('/反実仮想|もし.*なら|counterfactual|what if|假如|如果/u', $text)) $level = max($level, 5);
+    if (preg_match('/矛盾|対立|反証|conflict|contradiction|冲突|矛盾/u', $text)) $level = max($level, 6);
+    if (preg_match('/仮説|新しい説明|hypothesis|假设/u', $text)) $level = max($level, 7);
+    return ['level' => $level, 'score' => (int) round(($level / 7) * 100)];
+}
+
+function fourier_concept_has_negation($value) {
+    return (bool) preg_match('/ではない|とは限らない|しない|できない|ません|ない|not\b|never\b|cannot\b|isn[\'’]t\b|不是|并非|不会|不能/u', (string) $value);
+}
+
+function fourier_concept_without_negation($value) {
+    return preg_replace('/ではない|とは限らない|しない|できない|ません|ない|not\b|never\b|cannot\b|isn[\'’]t\b|不是|并非|不会|不能/iu', '', (string) $value);
+}
+
+/**
+ * 現在の概念空間に対する学習価値を、外部APIを使わず再現可能な形で算出します。
+ * 指標は選別支援であり、事実性やライセンスを自動的に保証するものではありません。
+ */
+function fourier_concept_build_training_value($concept, $concept_map, $branch_questions, $quality, $context = []) {
+    $branches = is_array($concept_map['branches'] ?? null) ? $concept_map['branches'] : [];
+    $questions = is_array($branch_questions['questions'] ?? null) ? $branch_questions['questions'] : [];
+    $question_lookup = [];
+    $branch_question_counts = [];
+    foreach ($questions as $question) {
+        $question_id = sanitize_key($question['question_id'] ?? '');
+        $branch_id = sanitize_key($question['branch_id'] ?? '');
+        if ($question_id !== '') $question_lookup[$question_id] = $question;
+        if ($branch_id !== '') $branch_question_counts[$branch_id] = ($branch_question_counts[$branch_id] ?? 0) + 1;
+    }
+
+    $variants = [];
+    foreach (($quality['items'] ?? []) as $item) {
+        foreach (['accepted_variants' => true, 'rejected_variants' => false] as $key => $accepted) {
+            foreach (($item[$key] ?? []) as $variant) {
+                $variants[] = [
+                    'variant_id' => sanitize_key($variant['variant_id'] ?? ''),
+                    'question_id' => sanitize_key($item['question_id'] ?? ''),
+                    'branch_id' => sanitize_key($item['branch_id'] ?? ''),
+                    'question' => (string) ($item['question'] ?? ''),
+                    'answer' => (string) ($variant['answer'] ?? ''),
+                    'quality_score' => (int) ($variant['quality_score'] ?? 0),
+                    'confidence' => fourier_concept_confidence_percent($variant['confidence'] ?? ''),
+                    'accepted' => $accepted,
+                    'review_status' => sanitize_key($variant['review_status'] ?? ($accepted ? 'accepted' : 'rejected')),
+                    'duplicate_similarity' => (float) ($variant['duplicate_similarity'] ?? 0),
+                ];
+            }
+        }
+    }
+    $accepted_variants = array_values(array_filter($variants, static function ($variant) { return $variant['accepted']; }));
+    $accepted_by_branch = [];
+    $accepted_questions_by_branch = [];
+    foreach ($accepted_variants as $variant) {
+        $accepted_by_branch[$variant['branch_id']] = ($accepted_by_branch[$variant['branch_id']] ?? 0) + 1;
+        $accepted_questions_by_branch[$variant['branch_id']][$variant['question_id']] = true;
+    }
+
+    $source_id = sanitize_key($context['source_id'] ?? ('concept-' . substr(sha1((string) $concept), 0, 16)));
+    $knowledge_id = sanitize_key($context['knowledge_id'] ?? ('knowledge-' . substr(sha1(fourier_concept_normalize_text($concept)), 0, 16)));
+    $sample_profiles = [];
+    foreach ($variants as $variant) {
+        $max_similarity = 0.0;
+        foreach ($accepted_variants as $comparison) {
+            if ($variant['variant_id'] === $comparison['variant_id']) continue;
+            $max_similarity = max($max_similarity, fourier_concept_semantic_similarity($variant['answer'], $comparison['answer']));
+        }
+        $novelty = (int) round((1 - min(1, $max_similarity)) * 100);
+        $reliability = (int) round(($variant['quality_score'] * 0.7) + ($variant['confidence'] * 0.3));
+        $branch_total = max(1, (int) ($accepted_by_branch[$variant['branch_id']] ?? 0));
+        $question_is_unique = count(array_filter($accepted_variants, static function ($candidate) use ($variant) {
+            return $candidate['question_id'] === $variant['question_id'];
+        })) <= 1;
+        $coverage_gain = min(100, max(15, (int) round(100 / $branch_total)) + ($question_is_unique ? 20 : 0));
+        $difficulty = fourier_concept_difficulty($variant['branch_id'], $variant['question'], $variant['answer']);
+        $contradiction = 'none_detected';
+        foreach ($variants as $comparison) {
+            if ($variant['variant_id'] === $comparison['variant_id'] || $variant['question_id'] !== $comparison['question_id']) continue;
+            if (fourier_concept_has_negation($variant['answer']) === fourier_concept_has_negation($comparison['answer'])) continue;
+            $polarity_similarity = fourier_concept_semantic_similarity(fourier_concept_without_negation($variant['answer']), fourier_concept_without_negation($comparison['answer']));
+            if ($polarity_similarity >= 0.45) { $contradiction = 'possible_conflict'; break; }
+        }
+        $information_gain = round(($novelty * $reliability * $coverage_gain) / 10000, 1);
+        if (!$variant['accepted']) $eligibility = 'excluded';
+        elseif ($contradiction === 'possible_conflict' || $reliability < 65 || $information_gain < 35) $eligibility = 'review_required';
+        else $eligibility = 'eligible';
+        $recommendation = $eligibility === 'eligible' && $information_gain >= 55 ? 'add' : ($eligibility === 'excluded' ? 'hold' : 'review');
+        $sample_id = 'sample-' . substr(sha1($variant['variant_id'] . '|' . fourier_concept_normalize_text($variant['answer'])), 0, 16);
+        $sample_profiles[] = array_merge($variant, [
+            'sample_id' => $sample_id,
+            'novelty' => $novelty,
+            'reliability' => $reliability,
+            'coverage_gain' => $coverage_gain,
+            'redundancy' => (int) round($max_similarity * 100),
+            'difficulty_level' => $difficulty['level'],
+            'difficulty' => $difficulty['score'],
+            'contradiction_status' => $contradiction,
+            'information_gain' => $information_gain,
+            'training_eligibility' => $eligibility,
+            'recommendation' => $recommendation,
+            'lineage' => ['source_id' => $source_id, 'knowledge_id' => $knowledge_id, 'sample_id' => $sample_id],
+        ]);
+    }
+
+    $branch_profiles = [];
+    foreach ($branches as $branch) {
+        if (array_key_exists('enabled', $branch) && !$branch['enabled']) continue;
+        $branch_id = sanitize_key($branch['id'] ?? '');
+        if ($branch_id === '') continue;
+        $angles = fourier_concept_sanitize_question_angles($branch['question_angles'] ?? []);
+        $target_questions = max(2, min(5, count($angles) ?: 2));
+        $question_count = (int) ($branch_question_counts[$branch_id] ?? 0);
+        $answered_questions = count($accepted_questions_by_branch[$branch_id] ?? []);
+        $question_coverage = min(100, (int) round(($question_count / $target_questions) * 100));
+        $answer_coverage = $question_count ? min(100, (int) round(($answered_questions / $question_count) * 100)) : 0;
+        $coverage = (int) round(($question_coverage * 0.45) + ($answer_coverage * 0.55));
+        $branch_samples = array_values(array_filter($sample_profiles, static function ($sample) use ($branch_id) { return $sample['branch_id'] === $branch_id && $sample['accepted']; }));
+        $average_metric = static function ($items, $key) {
+            return $items ? round(array_sum(array_column($items, $key)) / count($items), 1) : 0;
+        };
+        $branch_profiles[] = [
+            'branch_id' => $branch_id,
+            'label' => sanitize_text_field($branch['label'] ?? $branch_id),
+            'priority' => max(1, min(3, (int) ($branch['priority'] ?? 2))),
+            'coverage' => $coverage,
+            'question_count' => $question_count,
+            'answered_question_count' => $answered_questions,
+            'accepted_sample_count' => count($branch_samples),
+            'reliability' => $average_metric($branch_samples, 'reliability'),
+            'novelty' => $average_metric($branch_samples, 'novelty'),
+            'redundancy' => $average_metric($branch_samples, 'redundancy'),
+            'difficulty' => $average_metric($branch_samples, 'difficulty'),
+            'information_gain' => $average_metric($branch_samples, 'information_gain'),
+            'conflict_count' => count(array_filter($branch_samples, static function ($sample) { return $sample['contradiction_status'] === 'possible_conflict'; })),
+        ];
+    }
+    usort($branch_profiles, static function ($left, $right) {
+        return $left['coverage'] <=> $right['coverage'] ?: $left['priority'] <=> $right['priority'];
+    });
+    $eligible = count(array_filter($sample_profiles, static function ($sample) { return $sample['training_eligibility'] === 'eligible'; }));
+    $review = count(array_filter($sample_profiles, static function ($sample) { return $sample['training_eligibility'] === 'review_required'; }));
+    $active_branch_count = count($branch_profiles);
+    $covered_branch_count = count(array_filter($branch_profiles, static function ($branch) { return $branch['accepted_sample_count'] > 0; }));
+    $average_information_gain = $accepted_variants ? round(array_sum(array_column(array_filter($sample_profiles, static function ($sample) { return $sample['accepted']; }), 'information_gain')) / count($accepted_variants), 1) : 0;
+    $average_reliability = $accepted_variants ? round(array_sum(array_column(array_filter($sample_profiles, static function ($sample) { return $sample['accepted']; }), 'reliability')) / count($accepted_variants), 1) : 0;
+    $coverage = $active_branch_count ? round(($covered_branch_count / $active_branch_count) * 100, 1) : 0;
+    $training_value = round(($average_information_gain * 0.55) + ($average_reliability * 0.25) + ($coverage * 0.2), 1);
+    return [
+        'schema_version' => '1.0',
+        'method' => 'deterministic_heuristic_v1',
+        'summary' => [
+            'training_value' => $training_value,
+            'information_gain' => $average_information_gain,
+            'reliability' => $average_reliability,
+            'concept_coverage' => $coverage,
+            'active_branches' => $active_branch_count,
+            'covered_branches' => $covered_branch_count,
+            'eligible_samples' => $eligible,
+            'review_required_samples' => $review,
+            'conflict_samples' => count(array_filter($sample_profiles, static function ($sample) { return $sample['contradiction_status'] === 'possible_conflict'; })),
+        ],
+        'provenance' => [
+            'source_id' => $source_id,
+            'knowledge_id' => $knowledge_id,
+            'source_type' => sanitize_key($context['source_type'] ?? 'llm_generated'),
+            'provider' => sanitize_key($context['provider'] ?? ''),
+            'pipeline_post_id' => (int) ($context['pipeline_post_id'] ?? 0),
+            'license_status' => sanitize_key($context['license_status'] ?? 'review_required'),
+            'temporal_validity' => sanitize_key($context['temporal_validity'] ?? 'unassessed'),
+        ],
+        'branches' => $branch_profiles,
+        'samples' => $sample_profiles,
+        'coverage_gaps' => array_slice(array_values(array_filter($branch_profiles, static function ($branch) { return $branch['coverage'] < 80; })), 0, 5),
+        'generated_at' => current_time('mysql'),
+    ];
+}
+
 /** 保存済み回答を指定設定で再評価し、監査履歴と投稿JSONを更新します。 */
 function fourier_concept_apply_quality_evaluation($id, $settings, $mark_knowledge_stale = false) {
     $id = (int) $id;
@@ -409,10 +608,23 @@ function fourier_concept_apply_quality_evaluation($id, $settings, $mark_knowledg
     if (!empty($data['curation_decisions']['items'])) {
         $quality = fourier_concept_apply_curation_decisions($quality, $data['curation_decisions']['items']);
     }
+    $training_value = fourier_concept_build_training_value(
+        $concept,
+        $data['concept_map'] ?? [],
+        $quality_questions,
+        $quality,
+        [
+            'source_id' => 'pipeline-' . $id,
+            'source_type' => 'llm_generated',
+            'provider' => get_post_meta($id, '_fourier_pipeline_provider', true),
+            'pipeline_post_id' => $id,
+        ]
+    );
     $quality['profile'] = $settings['profile'];
     $quality['evaluated_at'] = current_time('mysql');
     $quality['evaluation_revision'] = (int) ($previous_quality['evaluation_revision'] ?? 0) + 1;
     $data['answer_quality'] = $quality;
+    $data['training_value'] = $training_value;
     if ($mark_knowledge_stale && !empty($data['knowledge']['registered'])) {
         $data['knowledge']['sync_required'] = true;
         if (empty($data['knowledge']['sync_reason'])) $data['knowledge']['sync_reason'] = 'quality_re_evaluated';
@@ -426,6 +638,8 @@ function fourier_concept_apply_quality_evaluation($id, $settings, $mark_knowledg
     update_post_meta($id, '_fourier_concept_quality_accepted', $summary['accepted_variants']);
     update_post_meta($id, '_fourier_concept_quality_rejected', $summary['rejected_variants']);
     update_post_meta($id, '_fourier_concept_duplicate_rejected', $summary['duplicate_rejected']);
+    update_post_meta($id, '_fourier_concept_training_value', $training_value['summary']['training_value']);
+    update_post_meta($id, '_fourier_concept_training_eligible', $training_value['summary']['eligible_samples']);
     update_post_meta($id, '_fourier_concept_quality_history', $history);
     update_post_meta($id, '_fourier_pipeline_data', $data);
     update_post_meta($id, '_fourier_pipeline_message', sprintf('品質再評価完了: 採用%d件、除外%d件', $summary['accepted_variants'], $summary['rejected_variants']));
@@ -1200,6 +1414,16 @@ function fourier_concept_adopt_consensus($id, $selections, $user_id = 0) {
     ];
     $data['curation_decisions'] = ['schema_version' => '1.0', 'updated_at' => $adopted_at, 'items' => $items];
     $data['answer_quality'] = fourier_concept_apply_curation_decisions($data['answer_quality'] ?? [], $items);
+    $concept = get_post_meta($id, '_fourier_pipeline_concept', true) ?: ($data['concept'] ?? '');
+    $data['training_value'] = fourier_concept_build_training_value(
+        $concept,
+        $data['concept_map'] ?? [],
+        $data['branch_questions'] ?? [],
+        $data['answer_quality'],
+        ['source_id' => 'pipeline-' . $id, 'source_type' => 'llm_generated', 'provider' => get_post_meta($id, '_fourier_pipeline_provider', true), 'pipeline_post_id' => $id]
+    );
+    update_post_meta($id, '_fourier_concept_training_value', $data['training_value']['summary']['training_value']);
+    update_post_meta($id, '_fourier_concept_training_eligible', $data['training_value']['summary']['eligible_samples']);
     if (!empty($data['knowledge']['registered'])) {
         $data['knowledge']['sync_required'] = true;
         $data['knowledge']['sync_reason'] = 'consensus_answers_adopted';

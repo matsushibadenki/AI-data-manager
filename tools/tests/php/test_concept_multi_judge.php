@@ -112,6 +112,7 @@ if (is_wp_error($user_id)) {
             if (is_wp_error($adopted) || ($adopted['adopted_count'] ?? 0) !== 1) $failures[] = 'one selected consensus answer must be adopted';
             if (($after_adoption['answer_quality']['items'][0]['accepted_variants'][0]['variant_id'] ?? '') !== 'dog-sense-1-v2') $failures[] = 'adopted variant must become the preferred accepted answer';
             if (empty($after_adoption['answer_quality']['items'][0]['accepted_variants'][0]['consensus_preferred'])) $failures[] = 'adopted answer must carry the consensus preference marker';
+            if (empty($after_adoption['training_value']['samples'])) $failures[] = 'consensus adoption must refresh training value and sample lineage';
             $curation_history = get_post_meta($post_id, '_fourier_concept_curation_history', true);
             if (count($curation_history ?? []) !== 1) $failures[] = 'consensus adoption must record audit history';
             fourier_concept_apply_quality_evaluation($post_id, ['profile' => 'strict'], true);

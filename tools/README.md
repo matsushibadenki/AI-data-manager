@@ -49,7 +49,7 @@ cd /path/to/AI-data-manager
 python tools/maintenance/python/update_import.py
 ```
 
-概念回答の品質評価と意味的重複除去は、Dockerのアプリコンテナ内で確認できます。
+概念回答の品質評価、意味的重複除去、学習価値・被覆・矛盾候補・最小系譜は、Dockerのアプリコンテナ内で確認できます。
 
 ```bash
 php wp-content/themes/AI-data-manager/tools/tests/php/test_concept_quality.php
