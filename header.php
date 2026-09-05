@@ -44,6 +44,11 @@
 
     <?php
     // グローバル学習データ管理メニュー
+    $menu_locale = determine_locale();
+    $menu_language = strpos($menu_locale, 'zh') === 0 ? 'zh' : (strpos($menu_locale, 'en') === 0 ? 'en' : 'ja');
+    $menu_text = static function ($ja, $en, $zh) use ($menu_language) {
+        return ['ja' => $ja, 'en' => $en, 'zh' => $zh][$menu_language];
+    };
     $learning_menu_items = [
         ['url' => home_url('/'), 'label' => 'ダッシュボード'],
         ['url' => home_url('/index-image/'), 'label' => 'メディア一覧'],
@@ -53,6 +58,7 @@
         ['url' => home_url('/text-based-learning/'), 'label' => '個別登録'],
         ['url' => home_url('/media-upload/'), 'label' => 'メディア登録'],
         ['url' => home_url('/ai-registration/'), 'label' => 'AI登録'],
+        ['url' => home_url('/ai-pipeline/'), 'label' => $menu_text('AIパイプライン', 'AI Pipeline', 'AI流程')],
         ['url' => home_url('/bot-registration/'), 'label' => 'Bot登録'],
         ['type' => 'separator'],
         ['url' => home_url('/api-settings/'), 'label' => 'API設定'],
