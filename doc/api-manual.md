@@ -138,6 +138,14 @@ curl -X DELETE -H "Authorization: Bearer YOUR_SECRET_TOKEN" \
   - ※ もしAI Data ManagerをDockerコンテナ内で動かしており、ホストマシンのOllamaへアクセスしたい場合は `http://host.docker.internal:11434` や、マシンのローカルIPを指定してください。
 - **Model Name**: 既に `ollama run <model>` 等でダウンロード済みのモデル名（例: `gemma4:12b-mlx`, `command-r`）を入力します。
 
+Docker Compose設定の`extra_hosts`は、既存コンテナには自動反映されません。`host.docker.internal`を解決できない場合は、プロジェクトルートでWebコンテナとCron Workerを再作成してください。
+
+```bash
+docker compose up -d --force-recreate app wordpress-cron
+```
+
+「接続確認」は`/api/tags`を使い、Ollama APIへの到達と入力したモデル名の存在だけを軽量に確認します。実際の文章生成は行いません。接続に成功した後で「設定を保存」を押してください。
+
 ### 2.3. ローカルLLM: Llama.cpp / その他OpenAI互換API
 Llama.cppのサーバーモードや、vLLMなどの「OpenAI互換サーバー」を利用する場合の設定です。
 - **Endpoint URL**: OpenAI互換のベースURLを入力します。

@@ -437,6 +437,35 @@ function llm_api_call_gemini($api_key, $model, $system, $user)
     return _parse_json_from_llm_response($content);
 }
 
+/** Ollamaの疎通とモデル存在を、生成処理を走らせず軽量に確認します。 */
+function llm_test_ollama_connection($base_url, $model = '')
+{
+    $base_url = rtrim(trim((string) $base_url), '/');
+    if ($base_url === '') throw new Exception('URLが空です。');
+    $response = wp_remote_get($base_url . '/api/tags', ['timeout' => 15]);
+    if (is_wp_error($response)) {
+        $message = $response->get_error_message();
+        if (stripos($message, 'Could not resolve host') !== false) {
+            throw new Exception('Ollamaのホスト名を解決できません。Docker Composeのhost.docker.internal設定を反映するため、WebコンテナとCron Workerを再作成してください。');
+        }
+        throw new Exception($message);
+    }
+    $status = (int) wp_remote_retrieve_response_code($response);
+    if ($status < 200 || $status >= 300) throw new Exception('Ollama APIがHTTP ' . $status . 'を返しました。');
+    $body = json_decode(wp_remote_retrieve_body($response), true);
+    if (!is_array($body) || !isset($body['models']) || !is_array($body['models'])) throw new Exception('Ollama APIからモデル一覧を取得できませんでした。');
+    $available = [];
+    foreach ($body['models'] as $item) {
+        $name = trim((string) ($item['name'] ?? ($item['model'] ?? '')));
+        if ($name !== '') $available[] = $name;
+    }
+    $model = trim((string) $model);
+    if ($model !== '' && !in_array($model, $available, true)) {
+        throw new Exception('Ollamaには指定モデル「' . $model . '」がありません。先にollama pullを実行するか、モデル名を確認してください。');
+    }
+    return ['status' => 'OK', 'model' => $model, 'model_count' => count($available)];
+}
+
 function llm_api_call_ollama($base_url, $model, $system, $user)
 {
     $url = rtrim($base_url, '/') . '/api/chat';
@@ -524,9 +553,12 @@ function llm_api_call_custom($base_url, $model, $system, $user)
  * @return string LLMの生テキスト応答
  * @throws Exception 通信エラーやAPIエラー時
  */
-function llm_api_call_raw($provider, $system_prompt, $user_prompt)
+function llm_api_call_raw($provider, $system_prompt, $user_prompt, $user_id = 0)
 {
-    $current_user_id = get_current_user_id();
+    // WP-Cron/CLI workers do not have a logged-in user. Callers that own a
+    // background job must pass that owner's ID so per-user credentials and
+    // local endpoint settings are resolved deterministically.
+    $current_user_id = (int) ($user_id ?: get_current_user_id());
 
     switch ($provider) {
         case 'openai':
@@ -1115,7 +1147,7 @@ function test_llm_connection_handler()
                 $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : 'http://127.0.0.1:11434';
                 $model = isset($_POST['model']) ? sanitize_text_field($_POST['model']) : 'gemma4:12b-mlx';
                 if (!$url) throw new Exception("URLが空です。");
-                $response_data = llm_api_call_ollama($url, $model, $system_prompt, $user_prompt);
+                $response_data = llm_test_ollama_connection($url, $model);
                 break;
             case 'custom':
                 $url = isset($_POST['url']) ? sanitize_text_field($_POST['url']) : 'http://127.0.0.1:8080/v1';

@@ -13,6 +13,23 @@ $pipeline_text = static function ($ja, $en, $zh) use ($pipeline_language) {
   return ['ja' => $ja, 'en' => $en, 'zh' => $zh][$pipeline_language];
 };
 $nonce = wp_create_nonce('learning_data_action');
+$pipeline_provider_statuses = fourier_concept_multi_judge_provider_status(get_current_user_id());
+$pipeline_default_provider = 'openai';
+foreach ($pipeline_provider_statuses as $provider_key => $provider_status) {
+  if (!empty($provider_status['configured'])) {
+    $pipeline_default_provider = $provider_key;
+    break;
+  }
+}
+$pipeline_sources = get_posts([
+  'post_type' => 'post',
+  'post_status' => ['pending', 'publish'],
+  'author' => get_current_user_id(),
+  'meta_key' => '_fourier_pipeline_url',
+  'posts_per_page' => 30,
+  'orderby' => 'modified',
+  'order' => 'DESC',
+]);
 $items = get_posts(['post_type' => 'post', 'post_status' => ['pending', 'publish'], 'meta_key' => '_fourier_pipeline_stage', 'posts_per_page' => 30, 'orderby' => 'modified', 'order' => 'DESC']);
 $js_text = [
   'urlRequired' => $pipeline_text('URLを入力してください。', 'Enter a URL.', '请输入URL。'),
@@ -23,6 +40,8 @@ $js_text = [
   'conceptRequired' => $pipeline_text('概念を入力してください。', 'Enter a concept.', '请输入概念。'),
   'mapping' => $pipeline_text('概念マップをキューに追加しています…', 'Adding the concept map to the queue…', '正在将概念图添加到队列…'),
   'conceptStarted' => $pipeline_text('概念蒸留を開始しました。処理キューを更新します。', 'Concept distillation started. Updating the queue.', '概念蒸馏已开始。正在更新队列。'),
+  'retrying' => $pipeline_text('同じ工程から再実行しています…', 'Retrying from the failed stage…', '正在从失败阶段重新执行…'),
+  'retried' => $pipeline_text('再実行を開始しました。', 'Retry started.', '已开始重新执行。'),
   'saveFailed' => $pipeline_text('保存できませんでした。', 'Could not save.', '无法保存。'),
   'reevaluating' => $pipeline_text('保存済み回答を再評価しています…', 'Re-evaluating saved answers…', '正在重新评估已保存的回答…'),
   'reevaluated' => $pipeline_text('再評価が完了しました。表示を更新します。', 'Re-evaluation complete. Refreshing the results.', '重新评估完成。正在刷新结果。'),
@@ -47,7 +66,11 @@ get_header();
 <main class="fourier-pipeline" data-ajax="<?php echo esc_url(admin_url('admin-ajax.php')); ?>" data-nonce="<?php echo esc_attr($nonce); ?>">
   <section class="pipeline-hero">
     <p class="eyebrow">AI LEARNING DATA</p>
-    <h1><?php echo esc_html($pipeline_text('URLを、レビュー可能な学習データへ。', 'Turn URLs into reviewable learning data.', '将URL转换为可审核的学习数据。')); ?></h1>
+    <h1>
+      <span><?php echo esc_html($pipeline_text('URLを、', 'Turn URLs', '将URL')); ?></span>
+      <span><?php echo esc_html($pipeline_text('レビュー可能な', 'into reviewable', '转换为可审核的')); ?></span>
+      <span class="headline-break"><?php echo esc_html($pipeline_text('学習データへ。', 'learning data.', '学习数据。')); ?></span>
+    </h1>
     <p><?php echo esc_html($pipeline_text('取得から概念抽出、Knowledge Server登録までを自動処理します。', 'Automate extraction, concept discovery, and Knowledge Server registration.', '自动完成采集、概念提取和Knowledge Server注册。')); ?></p>
   </section>
 
@@ -56,10 +79,9 @@ get_header();
     <div class="pipeline-form">
       <input id="pipeline-url" type="url" placeholder="https://example.com/article" required>
       <select id="pipeline-provider" aria-label="<?php echo esc_attr($pipeline_text('LLMプロバイダ', 'LLM provider', 'LLM提供商')); ?>">
-        <option value="openai">OpenAI</option>
-        <option value="gemini">Gemini</option>
-        <option value="ollama">Ollama</option>
-        <option value="custom">Custom</option>
+        <?php foreach ($pipeline_provider_statuses as $provider_key => $provider_status): ?>
+          <option value="<?php echo esc_attr($provider_key); ?>" <?php selected($pipeline_default_provider, $provider_key); ?> <?php disabled(empty($provider_status['configured'])); ?>><?php echo esc_html($provider_status['label'] . ' · ' . $provider_status['model'] . (!empty($provider_status['configured']) ? '' : '（未設定）')); ?></option>
+        <?php endforeach; ?>
       </select>
       <button id="pipeline-start" type="button"><?php echo esc_html($pipeline_text('パイプライン開始', 'Start pipeline', '启动流程')); ?></button>
     </div>
@@ -81,7 +103,28 @@ get_header();
     <label for="pipeline-concept"><?php echo esc_html($pipeline_text('中心概念', 'Root concept', '核心概念')); ?></label>
     <div class="pipeline-form">
       <input id="pipeline-concept" type="text" placeholder="<?php echo esc_attr($pipeline_text('例：犬', 'Example: dog', '例如：狗')); ?>" maxlength="120">
+      <select id="concept-provider" aria-label="<?php echo esc_attr($pipeline_text('概念蒸留のLLM', 'Concept distillation LLM', '概念蒸馏LLM')); ?>">
+        <?php foreach ($pipeline_provider_statuses as $provider_key => $provider_status): ?>
+          <option value="<?php echo esc_attr($provider_key); ?>" <?php selected($pipeline_default_provider, $provider_key); ?> <?php disabled(empty($provider_status['configured'])); ?>><?php echo esc_html($provider_status['label'] . ' · ' . $provider_status['model'] . (!empty($provider_status['configured']) ? '' : '（未設定）')); ?></option>
+        <?php endforeach; ?>
+      </select>
       <button id="concept-start" type="button"><?php echo esc_html($pipeline_text('概念蒸留を開始', 'Start concept distillation', '启动概念蒸馏')); ?></button>
+    </div>
+    <div class="concept-source-control">
+      <label for="concept-source-post"><?php echo esc_html($pipeline_text('根拠資料（任意）', 'Grounding source (optional)', '依据资料（可选）')); ?></label>
+      <select id="concept-source-post">
+        <option value=""><?php echo esc_html($pipeline_text('根拠資料を使わない', 'No grounding source', '不使用依据资料')); ?></option>
+        <?php foreach ($pipeline_sources as $pipeline_source):
+          $source_data = get_post_meta($pipeline_source->ID, '_fourier_pipeline_data', true);
+          $source_ready = is_array($source_data) && !empty($source_data['extraction']['text']);
+          $source_stage = get_post_meta($pipeline_source->ID, '_fourier_pipeline_stage', true);
+        ?>
+          <option value="<?php echo (int) $pipeline_source->ID; ?>" data-url="<?php echo esc_attr(get_post_meta($pipeline_source->ID, '_fourier_pipeline_url', true)); ?>">
+            <?php echo esc_html($pipeline_source->post_title . ' — ' . ($source_ready ? $pipeline_text('文章抽出済み', 'Text ready', '文本已提取') : $source_stage)); ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <small><?php echo esc_html($pipeline_text('URLパイプラインで抽出した本文を、概念マップ・質問・回答の根拠として使用します。', 'Use text extracted by the URL pipeline to ground the concept map, questions, and answers.', '使用URL流程提取的文本作为概念图、问题和回答的依据。')); ?></small>
     </div>
     <p id="concept-feedback" class="pipeline-feedback" role="status"></p>
   </section>
@@ -100,7 +143,11 @@ get_header();
         $stage = get_post_meta($item->ID, '_fourier_pipeline_stage', true);
         $status = get_post_meta($item->ID, '_fourier_pipeline_status', true);
         $kind = get_post_meta($item->ID, '_fourier_pipeline_kind', true);
+        $item_provider = get_post_meta($item->ID, '_fourier_pipeline_provider', true);
+        $concept_source_id = (int) get_post_meta($item->ID, '_fourier_pipeline_source_post_id', true);
         $source = $kind === 'concept' ? $pipeline_text('概念: ', 'Concept: ', '概念：') . get_post_meta($item->ID, '_fourier_pipeline_concept', true) : ($kind === 'auto_distillation' ? 'Auto Distillation Job #' . get_post_meta($item->ID, '_fourier_auto_job_id', true) : get_post_meta($item->ID, '_fourier_pipeline_url', true));
+        if ($item_provider) $source .= ' · ' . strtoupper($item_provider);
+        if ($concept_source_id) $source .= ' · ' . $pipeline_text('根拠: ', 'Source: ', '依据：') . get_the_title($concept_source_id);
         $pipeline_data = $kind === 'concept' ? get_post_meta($item->ID, '_fourier_pipeline_data', true) : [];
         $quality = is_array($pipeline_data) && is_array($pipeline_data['answer_quality'] ?? null) ? $pipeline_data['answer_quality'] : [];
         $quality_summary = $quality['summary'] ?? [];
@@ -116,7 +163,7 @@ get_header();
             $concept_map,
             $pipeline_data['branch_questions'] ?? [],
             $quality,
-            ['source_id' => 'pipeline-' . $item->ID, 'source_type' => 'llm_generated', 'provider' => get_post_meta($item->ID, '_fourier_pipeline_provider', true), 'pipeline_post_id' => $item->ID]
+            fourier_concept_training_context($item->ID, $pipeline_data)
           );
         }
         $training_summary = $training_value['summary'] ?? [];
@@ -160,13 +207,20 @@ get_header();
         $judge_trends = fourier_concept_multi_judge_trends($multi_judge, $judge_history);
         $judge_weights = fourier_concept_multi_judge_normalize_weights($multi_judge['weights'] ?? [], array_keys($multi_judge['results'] ?? []));
       ?>
-        <article class="pipeline-row" data-id="<?php echo (int) $item->ID; ?>">
+        <article class="pipeline-row" data-id="<?php echo (int) $item->ID; ?>" data-kind="<?php echo esc_attr($kind ?: 'url'); ?>" data-source-post-id="<?php echo (int) $concept_source_id; ?>">
           <div class="pipeline-title"><strong><?php echo esc_html($item->post_title); ?></strong><small><?php echo esc_html($source); ?></small></div>
           <div class="pipeline-state"><span class="state-<?php echo esc_attr($status); ?>"><?php echo esc_html($stage); ?></span><small><?php echo esc_html($status); ?></small></div>
           <?php if ($status === 'review'): ?>
             <div class="pipeline-actions">
               <button class="pipeline-review" data-decision="approve"><?php echo esc_html($pipeline_text('承認', 'Approve', '批准')); ?></button>
               <button class="pipeline-review secondary" data-decision="reject"><?php echo esc_html($pipeline_text('差し戻し', 'Reject', '驳回')); ?></button>
+            </div>
+          <?php endif; ?>
+          <?php if ($status === 'error'): ?>
+            <div class="pipeline-error-detail" role="alert">
+              <p><?php echo esc_html(get_post_meta($item->ID, '_fourier_pipeline_message', true) ?: $pipeline_text('処理に失敗しました。', 'Processing failed.', '处理失败。')); ?></p>
+              <button class="pipeline-retry" type="button"><?php echo esc_html($pipeline_text('この工程から再実行', 'Retry this stage', '从此阶段重试')); ?></button>
+              <small class="pipeline-retry-feedback" role="status"></small>
             </div>
           <?php endif; ?>
 
@@ -549,6 +603,14 @@ get_header();
     letter-spacing: -.04em
   }
 
+  .pipeline-hero h1 span {
+    white-space: nowrap
+  }
+
+  .pipeline-hero h1 .headline-break {
+    display: block
+  }
+
   .pipeline-hero p:not(.eyebrow) {
     max-width: 650px;
     color: #63736b;
@@ -589,6 +651,27 @@ get_header();
     font-size: 13px;
     line-height: 1.8;
     margin: 0 0 18px
+  }
+
+  .concept-source-control {
+    margin-top: 16px
+  }
+
+  .concept-source-control select {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #cfdcd3;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #fff;
+    font-size: 14px
+  }
+
+  .concept-source-control small {
+    display: block;
+    margin-top: 7px;
+    color: #718278;
+    line-height: 1.55
   }
 
   .pipeline-form {
@@ -729,6 +812,45 @@ get_header();
     background: #fff;
     color: #a54d45;
     border: 1px solid #e5c8c4
+  }
+
+  .pipeline-error-detail {
+    grid-column: 1/-1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid #edcbc7;
+    border-radius: 12px;
+    background: #fff7f6
+  }
+
+  .pipeline-error-detail p {
+    flex: 1;
+    margin: 0;
+    color: #8f3e38;
+    font-size: 13px;
+    line-height: 1.55
+  }
+
+  .pipeline-retry {
+    min-height: 38px;
+    border: 0;
+    border-radius: 10px;
+    padding: 0 14px;
+    background: #8f3e38;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer
+  }
+
+  .pipeline-retry:disabled {
+    opacity: .55;
+    cursor: wait
+  }
+
+  .pipeline-retry-feedback {
+    color: #8f3e38
   }
 
   .pipeline-empty {
@@ -949,6 +1071,10 @@ get_header();
       padding-top: 36px
     }
 
+    .pipeline-hero h1 span {
+      display: block
+    }
+
     .pipeline-card {
       padding: 18px
     }
@@ -966,6 +1092,15 @@ get_header();
     .pipeline-form select {
       width: 100%;
       margin-top: 10px
+    }
+
+    .pipeline-error-detail {
+      align-items: stretch;
+      flex-direction: column
+    }
+
+    .pipeline-retry {
+      width: 100%
     }
 
     .pipeline-row {
@@ -2438,10 +2573,16 @@ get_header();
         body: form
       }).then(response => response.json())
     };
-    const knowledge = () => ({
-      provider: document.querySelector('#pipeline-provider').value,
+    const knowledge = provider => ({
+      provider,
       knowledge_url: document.querySelector('#pipeline-knowledge-url').value,
       knowledge_token: document.querySelector('#pipeline-knowledge-token').value
+    });
+    const sourceSelect = document.querySelector('#concept-source-post');
+    document.querySelector('#pipeline-url').addEventListener('change', event => {
+      const enteredUrl = event.target.value.trim();
+      const match = Array.from(sourceSelect.options).find(option => option.dataset.url === enteredUrl);
+      if (match) sourceSelect.value = match.value
     });
     document.querySelector('#pipeline-start').onclick = () => {
       const url = document.querySelector('#pipeline-url').value.trim(),
@@ -2454,7 +2595,7 @@ get_header();
       feedback.textContent = text.queueing;
       post('fourier_pipeline_start', Object.assign({
         url
-      }, knowledge())).then(result => {
+      }, knowledge(document.querySelector('#pipeline-provider').value))).then(result => {
         feedback.textContent = result.success ? text.started : (result.data?.message || text.startFailed);
         if (result.success) setTimeout(() => location.reload(), 1800);
         button.disabled = false
@@ -2474,8 +2615,9 @@ get_header();
       button.disabled = true;
       conceptFeedback.textContent = text.mapping;
       post('fourier_concept_pipeline_start', Object.assign({
-        concept
-      }, knowledge())).then(result => {
+        concept,
+        source_post_id: sourceSelect.value
+      }, knowledge(document.querySelector('#concept-provider').value))).then(result => {
         conceptFeedback.textContent = result.success ? text.conceptStarted : (result.data?.message || text.startFailed);
         if (result.success) setTimeout(() => location.reload(), 1800);
         button.disabled = false
@@ -2484,6 +2626,27 @@ get_header();
         button.disabled = false
       })
     };
+    document.querySelectorAll('.pipeline-retry').forEach(button => button.onclick = () => {
+      const row = button.closest('.pipeline-row'),
+        status = row.querySelector('.pipeline-retry-feedback'),
+        isConcept = row.dataset.kind === 'concept',
+        provider = document.querySelector(isConcept ? '#concept-provider' : '#pipeline-provider').value,
+        selectedSource = sourceSelect.value || row.dataset.sourcePostId || '';
+      button.disabled = true;
+      status.textContent = text.retrying;
+      post('fourier_pipeline_retry', {
+        post_id: row.dataset.id,
+        provider,
+        source_post_id: isConcept ? selectedSource : ''
+      }).then(result => {
+        status.textContent = result.success ? text.retried : (result.data?.message || text.startFailed);
+        if (result.success) setTimeout(() => location.reload(), 1200);
+        else button.disabled = false
+      }).catch(() => {
+        status.textContent = text.networkError;
+        button.disabled = false
+      })
+    });
     document.querySelectorAll('.pipeline-review').forEach(button => button.onclick = () => {
       const row = button.closest('.pipeline-row');
       button.disabled = true;

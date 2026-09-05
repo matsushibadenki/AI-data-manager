@@ -61,6 +61,26 @@ if (($training_value['provenance']['source_id'] ?? '') !== 'pipeline-test') $fai
 if (($training_value['coverage_gaps'][0]['branch_id'] ?? '') !== 'reasoning') $failures[] = 'the empty reasoning branch must be the first coverage gap';
 if (!isset($training_value['samples'][0]['information_gain'], $training_value['samples'][0]['training_eligibility'])) $failures[] = 'samples must expose information gain and training eligibility';
 if ((fourier_concept_difficulty('reasoning', 'もし条件が変わったならどうなりますか？')['level'] ?? 0) < 5) $failures[] = 'counterfactual questions must receive curriculum level 5 or higher';
+if ((new ReflectionFunction('llm_api_call_raw'))->getNumberOfParameters() !== 4) $failures[] = 'raw LLM calls must accept an explicit job owner ID';
+
+$source_test_id = wp_insert_post(['post_title' => 'Grounding source smoke test', 'post_status' => 'pending', 'post_type' => 'post']);
+$grounded_concept_id = wp_insert_post(['post_title' => 'Grounded concept smoke test', 'post_status' => 'pending', 'post_type' => 'post']);
+if (!$source_test_id || !$grounded_concept_id || is_wp_error($source_test_id) || is_wp_error($grounded_concept_id)) {
+    $failures[] = 'temporary grounding posts could not be created';
+} else {
+    update_post_meta($source_test_id, '_fourier_pipeline_url', 'https://example.com/source');
+    update_post_meta($source_test_id, '_fourier_pipeline_data', ['extraction' => ['title' => 'Reference', 'text' => '根拠資料の本文です。']]);
+    update_post_meta($grounded_concept_id, '_fourier_pipeline_source_post_id', $source_test_id);
+    $source_context = fourier_concept_source_context($grounded_concept_id);
+    if (is_wp_error($source_context) || empty($source_context['ready'])) $failures[] = 'extracted URL text must be available to concept distillation';
+    if (($source_context['text'] ?? '') !== '根拠資料の本文です。') $failures[] = 'concept grounding must preserve extracted source text';
+    if (($source_context['reference']['post_id'] ?? 0) !== $source_test_id) $failures[] = 'concept grounding must preserve source lineage';
+    $training_context = fourier_concept_training_context($grounded_concept_id, ['source_reference' => $source_context['reference']]);
+    if (($training_context['source_type'] ?? '') !== 'web_extracted') $failures[] = 'grounded training data must identify its web-extracted source type';
+    if (($training_context['source_id'] ?? '') !== 'url-pipeline-' . $source_test_id) $failures[] = 'grounded training data must use the URL pipeline as its source ID';
+    wp_delete_post($grounded_concept_id, true);
+    wp_delete_post($source_test_id, true);
+}
 
 $conflict_quality = ['items' => [[
     'question_id' => 'dog-claim-1', 'branch_id' => 'characteristics', 'question' => '犬は哺乳類ですか？',

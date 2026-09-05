@@ -25,17 +25,20 @@ function fourier_pipeline_enqueue($id, $delay = 1) {
 }
 add_action('fourier_pipeline_worker', 'fourier_pipeline_worker');
 
-function fourier_pipeline_start($url, $user_id = 0) {
+function fourier_pipeline_start($url, $user_id = 0, $provider = '') {
     $url = esc_url_raw(trim($url));
     if (!$url || !wp_http_validate_url($url)) return new WP_Error('invalid_url', '有効なURLを入力してください。');
+    $user_id = $user_id ?: get_current_user_id();
+    $provider = sanitize_key($provider ?: ($_POST['provider'] ?? 'openai'));
+    if (!in_array($provider, ['openai', 'gemini', 'ollama', 'custom'], true)) $provider = 'openai';
+    $provider_statuses = fourier_concept_multi_judge_provider_status($user_id);
+    if (empty($provider_statuses[$provider]['configured'])) return new WP_Error('provider_unavailable', '選択したLLMが未設定です。API設定を確認してください。');
     $existing = get_posts(['post_type' => 'post', 'post_status' => 'any', 'meta_key' => '_fourier_pipeline_url', 'meta_value' => $url, 'fields' => 'ids', 'numberposts' => 1]);
     if ($existing) return new WP_Error('duplicate_url', 'このURLはすでにパイプラインに登録されています。', ['post_id' => $existing[0]]);
-    $id = wp_insert_post(['post_title' => 'Pipeline: ' . wp_parse_url($url, PHP_URL_HOST), 'post_content' => '', 'post_status' => 'pending', 'post_type' => 'post', 'post_author' => $user_id ?: get_current_user_id()]);
+    $id = wp_insert_post(['post_title' => 'Pipeline: ' . wp_parse_url($url, PHP_URL_HOST), 'post_content' => '', 'post_status' => 'pending', 'post_type' => 'post', 'post_author' => $user_id]);
     if (is_wp_error($id)) return $id;
     update_post_meta($id, '_fourier_pipeline_url', $url);
-    update_post_meta($id, '_fourier_pipeline_owner', $user_id ?: get_current_user_id());
-    $provider = sanitize_key($_POST['provider'] ?? 'openai');
-    if (!in_array($provider, ['openai', 'gemini', 'ollama', 'custom'], true)) $provider = 'openai';
+    update_post_meta($id, '_fourier_pipeline_owner', $user_id);
     update_post_meta($id, '_fourier_pipeline_provider', $provider);
     if (!empty($_POST['knowledge_url'])) update_user_meta($user_id ?: get_current_user_id(), 'fourier_knowledge_server_url', esc_url_raw($_POST['knowledge_url']));
     if (!empty($_POST['knowledge_token'])) update_user_meta($user_id ?: get_current_user_id(), 'fourier_knowledge_server_token', sanitize_text_field($_POST['knowledge_token']));
@@ -46,21 +49,39 @@ function fourier_pipeline_start($url, $user_id = 0) {
 }
 
 /** 概念を起点に観念の枝・質問・複数回答を生成するパイプラインを登録します。 */
-function fourier_concept_pipeline_start($concept, $user_id = 0) {
+function fourier_concept_pipeline_start($concept, $user_id = 0, $provider = '', $source_post_id = 0) {
     $concept = sanitize_text_field(trim($concept));
     if (!$concept || mb_strlen($concept) > 120) return new WP_Error('invalid_concept', '概念名は1〜120文字で入力してください。');
     $user_id = $user_id ?: get_current_user_id();
+    $provider = sanitize_key($provider ?: ($_POST['provider'] ?? 'openai'));
+    if (!in_array($provider, ['openai', 'gemini', 'ollama', 'custom'], true)) $provider = 'openai';
+    $provider_statuses = fourier_concept_multi_judge_provider_status($user_id);
+    if (empty($provider_statuses[$provider]['configured'])) return new WP_Error('provider_unavailable', '選択したLLMが未設定です。API設定を確認してください。');
     $existing = get_posts(['post_type' => 'post', 'post_status' => 'any', 'meta_key' => '_fourier_pipeline_concept', 'meta_value' => $concept, 'fields' => 'ids', 'numberposts' => 1]);
     if ($existing) return new WP_Error('duplicate_concept', 'この概念はすでに蒸留キューに登録されています。', ['post_id' => $existing[0]]);
     $id = wp_insert_post(['post_title' => 'Concept Distillation: ' . $concept, 'post_content' => '', 'post_status' => 'pending', 'post_type' => 'post', 'post_author' => $user_id]);
     if (is_wp_error($id)) return $id;
-    $provider = sanitize_key($_POST['provider'] ?? 'openai');
-    if (!in_array($provider, ['openai', 'gemini', 'ollama', 'custom'], true)) $provider = 'openai';
     update_post_meta($id, '_fourier_pipeline_kind', 'concept');
     update_post_meta($id, '_fourier_pipeline_concept', $concept);
     update_post_meta($id, '_fourier_pipeline_owner', $user_id);
     update_post_meta($id, '_fourier_pipeline_provider', $provider);
-    update_post_meta($id, '_fourier_pipeline_data', ['concept' => $concept]);
+    $data = ['concept' => $concept];
+    $source_post_id = absint($source_post_id);
+    if ($source_post_id) {
+        $source_post = get_post($source_post_id);
+        $source_url = get_post_meta($source_post_id, '_fourier_pipeline_url', true);
+        if (!$source_post || !$source_url || (int) $source_post->post_author !== (int) $user_id) {
+            wp_delete_post($id, true);
+            return new WP_Error('invalid_source', '選択した根拠資料を確認できません。');
+        }
+        update_post_meta($id, '_fourier_pipeline_source_post_id', $source_post_id);
+        $data['source_reference'] = [
+            'post_id' => $source_post_id,
+            'url' => $source_url,
+            'title' => $source_post->post_title,
+        ];
+    }
+    update_post_meta($id, '_fourier_pipeline_data', $data);
     if (!empty($_POST['knowledge_url'])) update_user_meta($user_id, 'fourier_knowledge_server_url', esc_url_raw($_POST['knowledge_url']));
     if (!empty($_POST['knowledge_token'])) update_user_meta($user_id, 'fourier_knowledge_server_token', sanitize_text_field($_POST['knowledge_token']));
     fourier_pipeline_update($id, 'concept_map', 'queued', '概念マップの生成待ち');
@@ -82,9 +103,32 @@ function fourier_pipeline_fetch($url) {
     return ['title' => $title, 'text' => mb_substr($text, 0, 120000), 'html' => mb_substr($html, 0, 200000)];
 }
 
-function fourier_pipeline_llm($provider, $instruction, $source) {
+function fourier_pipeline_llm($provider, $instruction, $source, $user_id = 0) {
     $system = 'あなたはAI学習データの編集者です。入力にない事実を追加せず、日本語で正確に処理してください。必ずJSONオブジェクトだけを返してください。';
-    return llm_api_call_raw($provider, $system, $instruction . "\n\n対象本文:\n" . mb_substr($source, 0, 50000));
+    return llm_api_call_raw($provider, $system, $instruction . "\n\n対象本文:\n" . mb_substr($source, 0, 50000), $user_id);
+}
+
+/** Return extracted source text attached to a concept job, or its wait/error state. */
+function fourier_concept_source_context($id, $data = []) {
+    $source_post_id = (int) get_post_meta($id, '_fourier_pipeline_source_post_id', true);
+    if (!$source_post_id) return ['ready' => true, 'text' => '', 'reference' => []];
+    $source_post = get_post($source_post_id);
+    if (!$source_post) return new WP_Error('missing_source', '関連付けた根拠資料が見つかりません。');
+    $source_data = get_post_meta($source_post_id, '_fourier_pipeline_data', true);
+    $source_data = is_array($source_data) ? $source_data : [];
+    $text = trim((string) ($source_data['extraction']['text'] ?? ''));
+    $reference = [
+        'post_id' => $source_post_id,
+        'url' => get_post_meta($source_post_id, '_fourier_pipeline_url', true),
+        'title' => $source_data['extraction']['title'] ?? $source_post->post_title,
+    ];
+    if ($text !== '') return ['ready' => true, 'text' => $text, 'reference' => $reference];
+    $source_status = get_post_meta($source_post_id, '_fourier_pipeline_status', true);
+    if ($source_status === 'error') {
+        $message = get_post_meta($source_post_id, '_fourier_pipeline_message', true);
+        return new WP_Error('source_error', '根拠資料の文章抽出が完了していません。URLジョブを再実行してください。' . ($message ? ' 原因: ' . $message : ''));
+    }
+    return ['ready' => false, 'text' => '', 'reference' => $reference];
 }
 
 function fourier_pipeline_json($value) {
@@ -546,6 +590,8 @@ function fourier_concept_build_training_value($concept, $concept_map, $branch_qu
             'source_type' => sanitize_key($context['source_type'] ?? 'llm_generated'),
             'provider' => sanitize_key($context['provider'] ?? ''),
             'pipeline_post_id' => (int) ($context['pipeline_post_id'] ?? 0),
+            'source_post_id' => (int) ($context['source_post_id'] ?? 0),
+            'source_url' => esc_url_raw($context['source_url'] ?? ''),
             'license_status' => sanitize_key($context['license_status'] ?? 'review_required'),
             'temporal_validity' => sanitize_key($context['temporal_validity'] ?? 'unassessed'),
         ],
@@ -553,6 +599,20 @@ function fourier_concept_build_training_value($concept, $concept_map, $branch_qu
         'samples' => $sample_profiles,
         'coverage_gaps' => array_slice(array_values(array_filter($branch_profiles, static function ($branch) { return $branch['coverage'] < 80; })), 0, 5),
         'generated_at' => current_time('mysql'),
+    ];
+}
+
+/** Build provenance consistently for grounded and concept-only distillation. */
+function fourier_concept_training_context($id, $data = []) {
+    $reference = is_array($data['source_reference'] ?? null) ? $data['source_reference'] : [];
+    $source_post_id = (int) ($reference['post_id'] ?? get_post_meta($id, '_fourier_pipeline_source_post_id', true));
+    return [
+        'source_id' => $source_post_id ? 'url-pipeline-' . $source_post_id : 'pipeline-' . (int) $id,
+        'source_type' => $source_post_id ? 'web_extracted' : 'llm_generated',
+        'source_post_id' => $source_post_id,
+        'source_url' => $reference['url'] ?? ($source_post_id ? get_post_meta($source_post_id, '_fourier_pipeline_url', true) : ''),
+        'provider' => get_post_meta($id, '_fourier_pipeline_provider', true),
+        'pipeline_post_id' => (int) $id,
     ];
 }
 
@@ -613,12 +673,7 @@ function fourier_concept_apply_quality_evaluation($id, $settings, $mark_knowledg
         $data['concept_map'] ?? [],
         $quality_questions,
         $quality,
-        [
-            'source_id' => 'pipeline-' . $id,
-            'source_type' => 'llm_generated',
-            'provider' => get_post_meta($id, '_fourier_pipeline_provider', true),
-            'pipeline_post_id' => $id,
-        ]
+        fourier_concept_training_context($id, $data)
     );
     $quality['profile'] = $settings['profile'];
     $quality['evaluated_at'] = current_time('mysql');
@@ -757,21 +812,36 @@ function fourier_concept_pipeline_worker($id) {
     $stage = get_post_meta($id, '_fourier_pipeline_stage', true) ?: 'concept_map';
     $concept = get_post_meta($id, '_fourier_pipeline_concept', true);
     $provider = get_post_meta($id, '_fourier_pipeline_provider', true) ?: 'openai';
+    $owner = (int) get_post_meta($id, '_fourier_pipeline_owner', true);
     try {
+        fourier_pipeline_update($id, $stage, 'processing', '概念蒸留を実行しています');
+        $source = fourier_concept_source_context($id, $data);
+        if (is_wp_error($source)) throw new Exception($source->get_error_message());
+        if (empty($source['ready'])) {
+            fourier_pipeline_update($id, $stage, 'queued', '根拠資料の文章抽出を待っています');
+            fourier_pipeline_enqueue($id, 15);
+            return;
+        }
+        if (!empty($source['reference'])) $data['source_reference'] = $source['reference'];
+        $grounding = trim((string) ($source['text'] ?? ''));
+        $llm_source = $grounding !== ''
+            ? "中心概念: {$concept}\n根拠資料: " . ($source['reference']['title'] ?? '') . "\nURL: " . ($source['reference']['url'] ?? '') . "\n\n" . $grounding
+            : $concept;
         if ($stage === 'concept_map') {
             $seed = wp_json_encode(fourier_concept_branch_seed(), JSON_UNESCAPED_UNICODE);
             $prompt = "概念『{$concept}』の知識を、概念単位で漏れなく引き出すための観念マップを作成してください。\n" .
                 "次の10カテゴリを必ず検討し、概念に不要な枝は理由付きで除外し、必要な枝を最大3つ追加してください。\n" . $seed .
                 "\n出力キーは concept, definition, branches。branchesはid,label,scope,priority（1〜3）,question_angles（配列）を持つ配列にしてください。";
-            $data['concept_map'] = fourier_pipeline_json(fourier_pipeline_llm($provider, $prompt, $concept));
+            if ($grounding !== '') $prompt .= "\n根拠資料に基づく枝を優先し、資料にない固有事実は断定しないでください。";
+            $data['concept_map'] = fourier_pipeline_json(fourier_pipeline_llm($provider, $prompt, $llm_source, $owner));
             fourier_pipeline_update($id, 'branch_questions', 'queued', '枝ごとの質問を生成します');
         } elseif ($stage === 'branch_questions') {
             $prompt = "概念『{$concept}』について、以下の観念マップの各branchごとに、学習に有効な質問を2〜3問作ってください。単なる定義の反復を避け、事実確認、関係理解、具体例、誤解訂正、比較、推論・応用をバランスよく含めてください。各質問にquestion_id、branch_id、question_type、question、expected_answer_pointsを付けてください。出力キーは questions のみです。\n" . wp_json_encode($data['concept_map'], JSON_UNESCAPED_UNICODE);
-            $data['branch_questions'] = fourier_pipeline_json(fourier_pipeline_llm($provider, $prompt, $concept));
+            $data['branch_questions'] = fourier_pipeline_json(fourier_pipeline_llm($provider, $prompt, $llm_source, $owner));
             fourier_pipeline_update($id, 'branch_answers', 'queued', '質問ごとの複数回答を生成します');
         } elseif ($stage === 'branch_answers') {
             $prompt = "概念『{$concept}』の各質問に対し、独立した回答候補を3種類ずつ作ってください。1つ目は短い直接回答、2つ目は背景・理由を含む説明、3つ目は具体例・反例・比較・推論のいずれかを含む応用回答です。各回答はquestion_id, branch_id, answer_variants（style,answer,confidence, caveatsの配列）を持つオブジェクトにしてください。入力にない固有事実は断定せず、確信度と注意点を明示してください。出力キーは items のみです。\n" . wp_json_encode(['map' => $data['concept_map'], 'questions' => $data['branch_questions']], JSON_UNESCAPED_UNICODE);
-            $data['branch_answers'] = fourier_pipeline_json(fourier_pipeline_llm($provider, $prompt, $concept));
+            $data['branch_answers'] = fourier_pipeline_json(fourier_pipeline_llm($provider, $prompt, $llm_source, $owner));
             fourier_pipeline_update($id, 'answer_quality', 'queued', '回答品質と意味的重複を評価します');
         } elseif ($stage === 'answer_quality' || ($stage === 'knowledge' && empty($data['answer_quality']))) {
             $evaluation = fourier_concept_apply_quality_evaluation($id, fourier_concept_get_quality_settings($id));
@@ -780,7 +850,6 @@ function fourier_concept_pipeline_worker($id) {
             $summary = $evaluation['quality']['summary'];
             fourier_pipeline_update($id, 'knowledge', 'queued', sprintf('品質評価完了: 採用%d件、除外%d件', $summary['accepted_variants'], $summary['rejected_variants']));
         } elseif ($stage === 'knowledge') {
-            $owner = (int) get_post_meta($id, '_fourier_pipeline_owner', true);
             $ks_url = get_user_meta($owner, 'fourier_knowledge_server_url', true);
             $ks_token = get_user_meta($owner, 'fourier_knowledge_server_token', true);
             $accepted_count = (int) ($data['answer_quality']['summary']['accepted_variants'] ?? 0);
@@ -814,7 +883,20 @@ function fourier_pipeline_worker($id) {
     $data = get_post_meta($id, '_fourier_pipeline_data', true);
     $data = is_array($data) ? $data : [];
     $stage = get_post_meta($id, '_fourier_pipeline_stage', true) ?: 'scraping';
+    $owner = (int) get_post_meta($id, '_fourier_pipeline_owner', true);
     try {
+        $stage_messages = [
+            'scraping' => 'URLを取得しています',
+            'extraction' => '本文を抽出しています',
+            'summary' => 'LLMで要約しています',
+            'instruction' => 'Instructionを生成しています',
+            'qa' => 'Q&Aを生成しています',
+            'chat' => 'Chatデータを生成しています',
+            'tags' => 'タグを生成しています',
+            'concepts' => '概念を抽出しています',
+            'knowledge' => 'Knowledge Serverへ登録しています',
+        ];
+        fourier_pipeline_update($id, $stage, 'processing', $stage_messages[$stage] ?? '処理を実行しています');
         if ($stage === 'scraping') {
             $data['source'] = fourier_pipeline_fetch(get_post_meta($id, '_fourier_pipeline_url', true));
             fourier_pipeline_update($id, 'extraction', 'queued');
@@ -833,7 +915,7 @@ function fourier_pipeline_worker($id) {
                 'concepts' => '本文から概念・関係を抽出してください。キーは concepts（name, definition, relationsの配列）。',
             ];
             if (isset($prompts[$stage])) {
-                $data[$stage] = fourier_pipeline_json(fourier_pipeline_llm($provider, $prompts[$stage], $text));
+                $data[$stage] = fourier_pipeline_json(fourier_pipeline_llm($provider, $prompts[$stage], $text, $owner));
                 $next = ['summary' => 'instruction', 'instruction' => 'qa', 'qa' => 'chat', 'chat' => 'tags', 'tags' => 'concepts', 'concepts' => 'knowledge'][$stage];
                 fourier_pipeline_update($id, $next, 'queued');
             } elseif ($stage === 'knowledge') {
@@ -859,7 +941,7 @@ function fourier_pipeline_worker($id) {
 function fourier_pipeline_ajax_start() {
     check_ajax_referer('learning_data_action', 'nonce');
     if (!is_user_logged_in()) wp_send_json_error(['message' => 'ログインが必要です。'], 403);
-    $id = fourier_pipeline_start($_POST['url'] ?? '');
+    $id = fourier_pipeline_start($_POST['url'] ?? '', get_current_user_id(), $_POST['provider'] ?? 'openai');
     if (is_wp_error($id)) wp_send_json_error(['message' => $id->get_error_message(), 'post_id' => $id->get_error_data()]);
     wp_send_json_success(['post_id' => $id, 'message' => 'パイプラインを開始しました。']);
 }
@@ -868,11 +950,46 @@ add_action('wp_ajax_fourier_pipeline_start', 'fourier_pipeline_ajax_start');
 function fourier_concept_pipeline_ajax_start() {
     check_ajax_referer('learning_data_action', 'nonce');
     if (!is_user_logged_in()) wp_send_json_error(['message' => 'ログインが必要です。'], 403);
-    $id = fourier_concept_pipeline_start($_POST['concept'] ?? '');
+    $id = fourier_concept_pipeline_start(
+        $_POST['concept'] ?? '',
+        get_current_user_id(),
+        $_POST['provider'] ?? 'openai',
+        $_POST['source_post_id'] ?? 0
+    );
     if (is_wp_error($id)) wp_send_json_error(['message' => $id->get_error_message(), 'post_id' => $id->get_error_data()]);
     wp_send_json_success(['post_id' => $id, 'message' => '概念蒸留を開始しました。']);
 }
 add_action('wp_ajax_fourier_concept_pipeline_start', 'fourier_concept_pipeline_ajax_start');
+
+function fourier_pipeline_ajax_retry() {
+    check_ajax_referer('learning_data_action', 'nonce');
+    $id = absint($_POST['post_id'] ?? 0);
+    if (!$id || !current_user_can('edit_post', $id)) wp_send_json_error(['message' => '権限がありません。'], 403);
+    if (get_post_meta($id, '_fourier_pipeline_status', true) !== 'error') wp_send_json_error(['message' => 'エラー状態の処理だけ再実行できます。'], 400);
+    $provider = sanitize_key($_POST['provider'] ?? get_post_meta($id, '_fourier_pipeline_provider', true));
+    if (!in_array($provider, ['openai', 'gemini', 'ollama', 'custom'], true)) wp_send_json_error(['message' => 'LLMプロバイダーが不正です。'], 400);
+    $provider_statuses = fourier_concept_multi_judge_provider_status(get_current_user_id());
+    if (empty($provider_statuses[$provider]['configured'])) wp_send_json_error(['message' => '選択したLLMが未設定です。API設定を確認してください。'], 400);
+    update_post_meta($id, '_fourier_pipeline_provider', $provider);
+    if (get_post_meta($id, '_fourier_pipeline_kind', true) === 'concept') {
+        $source_post_id = absint($_POST['source_post_id'] ?? 0);
+        if ($source_post_id) {
+            $source_post = get_post($source_post_id);
+            $source_url = get_post_meta($source_post_id, '_fourier_pipeline_url', true);
+            if (!$source_post || !$source_url || !current_user_can('edit_post', $source_post_id)) wp_send_json_error(['message' => '選択した根拠資料を確認できません。'], 400);
+            update_post_meta($id, '_fourier_pipeline_source_post_id', $source_post_id);
+            $data = get_post_meta($id, '_fourier_pipeline_data', true);
+            $data = is_array($data) ? $data : [];
+            $data['source_reference'] = ['post_id' => $source_post_id, 'url' => $source_url, 'title' => $source_post->post_title];
+            update_post_meta($id, '_fourier_pipeline_data', $data);
+        }
+    }
+    delete_post_meta($id, '_fourier_pipeline_error');
+    fourier_pipeline_update($id, get_post_meta($id, '_fourier_pipeline_stage', true), 'queued', '同じ工程から再実行します');
+    fourier_pipeline_enqueue($id);
+    wp_send_json_success(['message' => '再実行を開始しました。']);
+}
+add_action('wp_ajax_fourier_pipeline_retry', 'fourier_pipeline_ajax_retry');
 
 function fourier_pipeline_ajax_status() {
     check_ajax_referer('learning_data_action', 'nonce');
@@ -1420,7 +1537,7 @@ function fourier_concept_adopt_consensus($id, $selections, $user_id = 0) {
         $data['concept_map'] ?? [],
         $data['branch_questions'] ?? [],
         $data['answer_quality'],
-        ['source_id' => 'pipeline-' . $id, 'source_type' => 'llm_generated', 'provider' => get_post_meta($id, '_fourier_pipeline_provider', true), 'pipeline_post_id' => $id]
+        fourier_concept_training_context($id, $data)
     );
     update_post_meta($id, '_fourier_concept_training_value', $data['training_value']['summary']['training_value']);
     update_post_meta($id, '_fourier_concept_training_eligible', $data['training_value']['summary']['eligible_samples']);

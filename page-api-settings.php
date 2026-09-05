@@ -131,6 +131,26 @@ get_header();
         font-size: 0.85rem;
         color: var(--text-secondary, #666);
         margin-top: 0.4rem;
+        line-height: 1.65;
+    }
+
+    .docker-endpoint-note {
+        display: block;
+        margin-top: 0.25rem;
+        color: var(--accent);
+    }
+
+    .docker-endpoint-note code {
+        display: block;
+        width: fit-content;
+        max-width: 100%;
+        margin: 0.3rem 0;
+        overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 480px) {
+        .settings-card { padding: 1.5rem 1.25rem; }
+        .settings-card h2 { font-size: 1.3rem; word-break: keep-all; }
     }
 </style>
 
@@ -182,7 +202,7 @@ get_header();
             <div class="form-group">
                 <label for="ollama_url">Endpoint URL</label>
                 <input type="url" id="ollama_url" name="ollama_url" value="<?php echo esc_attr($ollama_url); ?>" placeholder="http://host.docker.internal:11434">
-                <div class="help-text">Ollamaが稼働しているサーバーのURLを指定します。<br><span style="color:var(--accent);">※Docker上で動かしている場合、母艦のMac/PCに接続するには <code>http://host.docker.internal:11434</code> を指定してください。</span></div>
+                <div class="help-text">Ollamaが稼働しているサーバーのURLを指定します。<span class="docker-endpoint-note">Dockerからホスト側のOllamaへ接続する場合は、次のURLを指定してください。<code>http://host.docker.internal:11434</code></span></div>
             </div>
             <div class="form-group">
                 <label for="ollama_model">Default Model</label>
@@ -282,7 +302,7 @@ get_header();
                             resultSpan.textContent = data.data.message + '（※画面下部の「設定を保存」を押して確定してください）';
                             resultSpan.style.color = "green";
                         } else {
-                            resultSpan.textContent = data.data.message + '（※画面下部の「設定を保存」を押して確定してください）';
+                            resultSpan.textContent = data.data.message;
                             resultSpan.style.color = "red";
                         }
                     })
