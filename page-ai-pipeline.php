@@ -30,7 +30,37 @@ $pipeline_sources = get_posts([
   'orderby' => 'modified',
   'order' => 'DESC',
 ]);
-$items = get_posts(['post_type' => 'post', 'post_status' => ['pending', 'publish'], 'meta_key' => '_fourier_pipeline_stage', 'posts_per_page' => 30, 'orderby' => 'modified', 'order' => 'DESC']);
+$queue_search = isset($_GET['queue_search']) && is_string($_GET['queue_search']) ? mb_substr(sanitize_text_field(wp_unslash($_GET['queue_search'])), 0, 200) : '';
+$queue_status = isset($_GET['queue_status']) && is_string($_GET['queue_status']) ? sanitize_key($_GET['queue_status']) : 'all';
+$queue_page = isset($_GET['queue_page']) && is_scalar($_GET['queue_page']) ? max(1, min(100000, absint($_GET['queue_page']))) : 1;
+$queue_labels = [
+  'all' => $pipeline_text('すべて', 'All', '全部'),
+  'queued' => $pipeline_text('実行待ち', 'Queued', '等待执行'),
+  'processing' => $pipeline_text('処理中', 'Processing', '处理中'),
+  'review' => $pipeline_text('レビュー待ち', 'Awaiting review', '等待审核'),
+  'error' => $pipeline_text('エラー', 'Error', '错误'),
+  'approved' => $pipeline_text('承認済み', 'Approved', '已批准'),
+  'rejected' => $pipeline_text('差し戻し', 'Rejected', '已驳回'),
+];
+$stage_labels = [
+  'scraping' => ['ページ取得', 'Fetch page', '获取页面'], 'extraction' => ['文章抽出', 'Extract text', '提取文本'],
+  'summary' => ['要約生成', 'Summarize', '生成摘要'], 'instruction' => ['指示データ生成', 'Generate instructions', '生成指令'],
+  'qa' => ['質問・回答生成', 'Generate Q&A', '生成问答'], 'chat' => ['対話生成', 'Generate chat', '生成对话'],
+  'tags' => ['タグ生成', 'Generate tags', '生成标签'], 'concepts' => ['概念抽出', 'Extract concepts', '提取概念'],
+  'concept_map' => ['概念マップ生成', 'Concept map', '生成概念图'], 'branch_questions' => ['枝ごとの質問生成', 'Branch questions', '生成分支问题'],
+  'branch_answers' => ['複数回答生成', 'Answer variants', '生成多种回答'], 'answer_quality' => ['回答品質評価', 'Evaluate quality', '评估回答质量'],
+  'knowledge' => ['知識登録', 'Register knowledge', '注册知识'], 'review' => ['レビュー', 'Review', '审核'],
+];
+if (!isset($queue_labels[$queue_status])) $queue_status = 'all';
+$queue_query = fourier_pipeline_queue_query(get_current_user_id(), $queue_search, $queue_status, $queue_page);
+if ($queue_page > max(1, $queue_query->max_num_pages)) {
+  $queue_page = max(1, $queue_query->max_num_pages);
+  $queue_query = fourier_pipeline_queue_query(get_current_user_id(), $queue_search, $queue_status, $queue_page);
+}
+$items = $queue_query->posts;
+$queue_link = static function ($page) use ($queue_search, $queue_status) {
+  return add_query_arg(['queue_search' => $queue_search, 'queue_status' => $queue_status, 'queue_page' => $page], get_permalink()) . '#pipeline-queue';
+};
 $js_text = [
   'urlRequired' => $pipeline_text('URLを入力してください。', 'Enter a URL.', '请输入URL。'),
   'queueing' => $pipeline_text('キューに追加しています…', 'Adding to the queue…', '正在添加到队列…'),
@@ -59,6 +89,12 @@ $js_text = [
   'redistillRunning' => $pipeline_text('選択した質問を再蒸留しています…', 'Re-distilling selected questions…', '正在重新蒸馏所选问题…'),
   'weightsSaving' => $pipeline_text('モデル重みを反映して再計算しています…', 'Applying model weights…', '正在应用模型权重重新计算…'),
   'weightsSaved' => $pipeline_text('重みを保存しました。合議結果を更新します。', 'Weights saved. Refreshing consensus…', '权重已保存。正在更新共识结果…'),
+  'gapSelectBranch' => $pipeline_text('質問を追加する枝を選択してください。', 'Select at least one branch to expand.', '请选择至少一个要扩展的分支。'),
+  'gapGenerating' => $pipeline_text('追加質問候補を生成しています…', 'Generating additional question candidates…', '正在生成追加问题候选…'),
+  'gapPreviewReady' => $pipeline_text('差分プレビューを更新します。', 'Refreshing the question diff preview.', '正在刷新问题差异预览。'),
+  'gapSelectCandidate' => $pipeline_text('採用する新規質問を選択してください。', 'Select at least one new question.', '请选择至少一个新问题。'),
+  'gapApplying' => $pipeline_text('質問を追加し、回答生成を開始しています…', 'Adding questions and starting answer generation…', '正在添加问题并开始生成回答…'),
+  'gapApplied' => $pipeline_text('質問を追加しました。回答生成を開始します。', 'Questions added. Answer generation started.', '问题已添加，回答生成已开始。'),
 ];
 
 get_header();
@@ -133,12 +169,36 @@ get_header();
     <div class="pipeline-heading">
       <div>
         <p class="eyebrow">WORK QUEUE</p>
-        <h2><?php echo esc_html($pipeline_text('処理キュー', 'Work queue', '处理队列')); ?></h2>
+        <h2 id="pipeline-queue"><?php echo esc_html($pipeline_text('処理キュー', 'Work queue', '处理队列')); ?></h2>
       </div>
-      <span><?php echo esc_html(sprintf($pipeline_text('%d件', '%d items', '%d项'), count($items))); ?></span>
+      <span><?php echo esc_html(sprintf($pipeline_text('該当 %d件', '%d matches', '共%d条匹配'), $queue_query->found_posts)); ?></span>
+    </div>
+    <div class="queue-toolbar">
+      <p><?php echo esc_html($pipeline_text('本人の全データから検索します。1ページ20件、更新日時の新しい順です。', 'Search all your records. 20 per page, most recently updated first.', '搜索本人的全部记录，每页20条，按更新时间倒序。')); ?></p>
+      <form class="queue-browse-form" method="get" action="<?php echo esc_url(get_permalink()); ?>#pipeline-queue">
+      <?php if (!get_option('permalink_structure')): ?><input type="hidden" name="page_id" value="<?php echo (int) get_queried_object_id(); ?>"><?php endif; ?>
+      <label for="queue-search"><?php echo esc_html($pipeline_text('名称・出典を検索', 'Search title or source', '搜索名称或来源')); ?></label>
+      <input id="queue-search" name="queue_search" value="<?php echo esc_attr($queue_search); ?>" maxlength="200" type="search" autocomplete="off" aria-controls="pipeline-list">
+      <label for="queue-status"><?php echo esc_html($pipeline_text('状態', 'Status', '状态')); ?></label>
+      <select id="queue-status" name="queue_status">
+      <?php foreach ($queue_labels as $key => $label): ?><option value="<?php echo esc_attr($key); ?>" <?php selected($queue_status, $key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?>
+      </select>
+      <div class="queue-filters" role="group" aria-label="<?php echo esc_attr($pipeline_text('状態で絞り込み', 'Filter by status', '按状态筛选')); ?>">
+        <button type="submit"><?php echo esc_html($pipeline_text('検索・絞り込み', 'Apply filters', '搜索与筛选')); ?></button>
+        <a href="<?php echo esc_url(get_permalink() . '#pipeline-queue'); ?>"><?php echo esc_html($pipeline_text('条件をリセット', 'Reset filters', '重置条件')); ?></a>
+      </div>
+      </form>
+      <nav class="queue-pagination" aria-label="<?php echo esc_attr($pipeline_text('キューのページ移動', 'Queue pagination', '队列分页')); ?>">
+        <?php if ($queue_page > 1): ?><a rel="prev" href="<?php echo esc_url($queue_link($queue_page - 1)); ?>"><?php echo esc_html($pipeline_text('前へ', 'Previous', '上一页')); ?></a><?php endif; ?>
+        <span><?php echo esc_html(sprintf($pipeline_text('%d / %d ページ', 'Page %d of %d', '第%d页，共%d页'), $queue_page, max(1, $queue_query->max_num_pages))); ?></span>
+        <?php if ($queue_page < $queue_query->max_num_pages): ?><a rel="next" href="<?php echo esc_url($queue_link($queue_page + 1)); ?>"><?php echo esc_html($pipeline_text('次へ', 'Next', '下一页')); ?></a><?php endif; ?>
+      </nav>
+      <div class="queue-filters"><button id="queue-refresh" type="button"><?php echo esc_html($pipeline_text('状態だけ更新', 'Refresh status', '仅刷新状态')); ?></button>
+      <label><input id="queue-auto-refresh" type="checkbox"> <?php echo esc_html($pipeline_text('30秒ごとに状態確認', 'Check every 30 seconds', '每30秒检查状态')); ?></label></div>
+      <p id="queue-refresh-feedback" role="status" aria-live="polite"><?php echo esc_html($pipeline_text('状態のみ更新できます。編集内容は保持します。件数・順序・生成結果は再読み込み時に更新します。', 'Status refresh preserves edits. Counts, ordering and generated data update on reload.', '仅刷新状态并保留编辑。数量、排序和生成结果需重新加载。')); ?></p>
+      <p id="queue-no-match" role="status" <?php echo $items ? 'hidden' : ''; ?>><?php echo esc_html($pipeline_text('条件に一致するデータはありません。検索語や状態の絞り込みを変更してください。', 'No matches. Change the search or status filter.', '没有匹配记录，请更改关键词或状态筛选。')); ?></p>
     </div>
     <div id="pipeline-list">
-      <?php if (!$items): ?><p class="pipeline-empty"><?php echo esc_html($pipeline_text('まだ処理データはありません。', 'No pipeline data yet.', '暂无处理数据。')); ?></p><?php endif; ?>
       <?php foreach ($items as $item):
         $stage = get_post_meta($item->ID, '_fourier_pipeline_stage', true);
         $status = get_post_meta($item->ID, '_fourier_pipeline_status', true);
@@ -202,14 +262,34 @@ get_header();
         $curation_items = is_array($pipeline_data['curation_decisions']['items'] ?? null) ? $pipeline_data['curation_decisions']['items'] : [];
         $redistill_job = is_array($pipeline_data['selective_redistillation'] ?? null) ? $pipeline_data['selective_redistillation'] : [];
         $redistill_running = in_array($redistill_job['status'] ?? '', ['queued', 'running'], true);
+        $question_expansion = is_array($pipeline_data['question_expansion'] ?? null) ? $pipeline_data['question_expansion'] : [];
+        $question_expansion_running = in_array($question_expansion['status'] ?? '', ['queued', 'running'], true);
+        $question_expansion_provider = $question_expansion['provider'] ?? get_post_meta($item->ID, '_fourier_pipeline_provider', true);
+        if (empty($judge_statuses[$question_expansion_provider]['configured'])) {
+          foreach ($judge_statuses as $available_provider) {
+            if (!empty($available_provider['configured'])) { $question_expansion_provider = $available_provider['provider']; break; }
+          }
+        }
         $judge_history = $kind === 'concept' ? get_post_meta($item->ID, '_fourier_concept_multi_judge_history', true) : [];
         $judge_history = is_array($judge_history) ? $judge_history : [];
         $judge_trends = fourier_concept_multi_judge_trends($multi_judge, $judge_history);
         $judge_weights = fourier_concept_multi_judge_normalize_weights($multi_judge['weights'] ?? [], array_keys($multi_judge['results'] ?? []));
       ?>
-        <article class="pipeline-row" data-id="<?php echo (int) $item->ID; ?>" data-kind="<?php echo esc_attr($kind ?: 'url'); ?>" data-source-post-id="<?php echo (int) $concept_source_id; ?>">
+        <article class="pipeline-row" data-status="<?php echo esc_attr($status); ?>" data-id="<?php echo (int) $item->ID; ?>" data-kind="<?php echo esc_attr($kind ?: 'url'); ?>" data-source-post-id="<?php echo (int) $concept_source_id; ?>">
           <div class="pipeline-title"><strong><?php echo esc_html($item->post_title); ?></strong><small><?php echo esc_html($source); ?></small></div>
-          <div class="pipeline-state"><span class="state-<?php echo esc_attr($status); ?>"><?php echo esc_html($stage); ?></span><small><?php echo esc_html($status); ?></small></div>
+          <div class="pipeline-state"><span class="state-<?php echo esc_attr($status); ?>"><?php echo esc_html(isset($stage_labels[$stage]) ? $pipeline_text(...$stage_labels[$stage]) : $stage); ?></span><small><?php echo esc_html($queue_labels[$status] ?? $status); ?></small></div>
+          <div class="queue-health">
+            <?php
+            $updated = get_post_meta($item->ID, '_fourier_pipeline_updated', true);
+            $updated_date = $updated ? date_create_immutable($updated, wp_timezone()) : false;
+            $age = $updated_date ? max(0, time() - $updated_date->getTimestamp()) : 0;
+            ?>
+            <small>#<?php echo (int) $item->ID; ?> · <?php echo esc_html($pipeline_text('最終状態更新: ', 'Last status update: ', '最近状态更新：') . ($updated ?: '—')); ?><?php if ($updated_date): ?> · <?php echo esc_html(sprintf($pipeline_text('%d分経過', '%d min elapsed', '已过%d分钟'), floor($age / 60))); ?><?php endif; ?></small>
+            <?php if (in_array($status, ['queued', 'processing'], true)): ?>
+              <p><?php echo esc_html($status === 'queued' ? $pipeline_text('ワーカーの実行待ちです。登録完了は生成完了ではありません。', 'Waiting for a worker. Queued does not mean generated.', '正在等待执行器，注册成功不代表生成完成。') : $pipeline_text('ワーカーが工程を開始しました。AIの応答待ちを含みます。モデルの稼働を保証する表示ではありません。', 'The worker started this stage, including possible model wait time. This is not a model heartbeat.', '执行器已开始本阶段，可能正在等待模型响应。这不代表模型心跳正常。')); ?></p>
+              <?php if ($age >= 300): ?><p class="queue-warning"><?php echo esc_html($pipeline_text('5分以上、状態が更新されていません。失敗とは断定できません。モデルサーバー・Cron・通信の状態を確認し、重複した開始操作は避けてください。', 'No status update for 5+ minutes. This is not a confirmed failure. Check the model server, Cron and network before starting another job.', '超过5分钟未更新，尚不能判定失败。请检查模型服务器、Cron和网络，避免重复启动。')); ?></p><?php endif; ?>
+            <?php elseif ($status === 'review'): ?><p><?php echo esc_html($pipeline_text('生成結果を確認してから承認してください。承認すると公開されます。', 'Check the generated data before approval. Approval publishes it.', '请检查生成结果后再批准，批准将公开发布。')); ?></p><?php endif; ?>
+          </div>
           <?php if ($status === 'review'): ?>
             <div class="pipeline-actions">
               <button class="pipeline-review" data-decision="approve"><?php echo esc_html($pipeline_text('承認', 'Approve', '批准')); ?></button>
@@ -325,11 +405,32 @@ get_header();
                     <div class="coverage-gap-list">
                       <?php foreach ($coverage_gaps as $gap): ?>
                         <article>
-                          <div><b><?php echo esc_html($gap['label'] ?? $gap['branch_id']); ?></b><span><?php echo esc_html(sprintf($pipeline_text('質問 %1$d · 採用 %2$d', '%1$d questions · %2$d accepted', '%1$d个问题 · %2$d个采用样本'), (int) ($gap['question_count'] ?? 0), (int) ($gap['accepted_sample_count'] ?? 0))); ?></span></div>
+                          <label class="coverage-gap-choice"><input class="coverage-branch" type="checkbox" value="<?php echo esc_attr($gap['branch_id'] ?? ''); ?>"><span><b><?php echo esc_html($gap['label'] ?? $gap['branch_id']); ?></b><small><?php echo esc_html(sprintf($pipeline_text('質問 %1$d · 採用 %2$d', '%1$d questions · %2$d accepted', '%1$d个问题 · %2$d个采用样本'), (int) ($gap['question_count'] ?? 0), (int) ($gap['accepted_sample_count'] ?? 0))); ?></small></span></label>
                           <div class="coverage-meter" aria-label="<?php echo esc_attr(sprintf($pipeline_text('被覆率 %d%%', 'Coverage %d%%', '覆盖率 %d%%'), (int) ($gap['coverage'] ?? 0))); ?>"><i style="width:<?php echo esc_attr(max(0, min(100, (int) ($gap['coverage'] ?? 0)))); ?>%"></i></div>
                           <strong><?php echo esc_html((int) ($gap['coverage'] ?? 0)); ?>%</strong>
                         </article>
                       <?php endforeach; ?>
+                    </div>
+                    <div class="question-expansion" data-status="<?php echo esc_attr($question_expansion['status'] ?? 'idle'); ?>">
+                      <div class="question-expansion-controls">
+                        <label><?php echo esc_html($pipeline_text('質問生成LLM', 'Question generation LLM', '问题生成LLM')); ?><select class="question-expansion-provider">
+                          <?php foreach ($judge_statuses as $provider): ?><option value="<?php echo esc_attr($provider['provider']); ?>" <?php disabled(!$provider['configured']); ?> <?php selected($question_expansion_provider, $provider['provider']); ?>><?php echo esc_html($provider['label'] . ' · ' . $provider['model'] . ($provider['configured'] ? '' : '（未設定）')); ?></option><?php endforeach; ?>
+                        </select></label>
+                        <button class="question-expansion-start" type="button" <?php disabled($question_expansion_running || $judge_configured_count === 0); ?>><?php echo esc_html($question_expansion_running ? $pipeline_text('候補を生成中', 'Generating candidates', '正在生成候选') : $pipeline_text('選択した枝の質問候補を生成', 'Generate questions for selected branches', '为所选分支生成问题')); ?></button>
+                      </div>
+                      <p class="question-expansion-feedback" role="status"><?php echo esc_html($question_expansion['message'] ?? ''); ?></p>
+                      <?php if (($question_expansion['status'] ?? '') === 'preview' && !empty($question_expansion['candidates'])): ?>
+                        <div class="question-diff-preview">
+                          <div class="question-diff-heading"><b><?php echo esc_html($pipeline_text('質問の差分プレビュー', 'Question diff preview', '问题差异预览')); ?></b><span><?php echo esc_html(sprintf($pipeline_text('新規 %1$d · 重複候補 %2$d', '%1$d new · %2$d possible duplicates', '%1$d个新问题 · %2$d个重复候选'), (int) ($question_expansion['new_count'] ?? 0), (int) ($question_expansion['duplicate_count'] ?? 0))); ?></span></div>
+                          <?php foreach ($question_expansion['candidates'] as $candidate): $is_new = ($candidate['diff_status'] ?? '') === 'new'; ?>
+                            <label class="question-diff-item <?php echo $is_new ? 'is-new' : 'is-duplicate'; ?>">
+                              <input class="question-candidate" type="checkbox" value="<?php echo esc_attr($candidate['candidate_id'] ?? ''); ?>" <?php checked($is_new); ?> <?php disabled(!$is_new); ?>>
+                              <span><b><?php echo esc_html($candidate['question'] ?? ''); ?></b><small><?php echo esc_html(($candidate['branch_id'] ?? '') . ' · ' . ($is_new ? $pipeline_text('新規', 'New', '新增') : sprintf($pipeline_text('類似 %.0f%%', 'Similar %.0f%%', '相似 %.0f%%'), ((float) ($candidate['similarity'] ?? 0)) * 100))); ?></small><?php if (!$is_new && !empty($candidate['closest_question'])): ?><em><?php echo esc_html($pipeline_text('既存: ', 'Existing: ', '现有：') . $candidate['closest_question']); ?></em><?php endif; ?></span>
+                            </label>
+                          <?php endforeach; ?>
+                          <button class="question-expansion-apply" type="button"><?php echo esc_html($pipeline_text('選択質問を採用して回答生成', 'Add selected questions and generate answers', '采用所选问题并生成回答')); ?></button>
+                        </div>
+                      <?php endif; ?>
                     </div>
                   </section>
                 <?php endif; ?>
@@ -576,6 +677,20 @@ get_header();
 </main>
 
 <style>
+  .queue-toolbar { margin: 20px 0; padding: 18px; background: #f4f7f5; border-radius: 12px; }
+  .queue-toolbar p, .queue-health p { font-size: 13px; line-height: 1.65; margin: 8px 0; }
+  .queue-toolbar label { display: block; font-weight: 600; }
+  #queue-search { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0 12px; border: 1px solid #80988b; border-radius: 8px; }
+  .queue-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+  #queue-status { width: 100%; padding: 10px; margin: 8px 0 12px; border: 1px solid #80988b; border-radius: 8px; background: white; }
+  .queue-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 18px; }
+  .queue-pagination a, .queue-filters a { padding: 8px 12px; color: #244b39; text-decoration: underline; }
+  .queue-filters button { border: 1px solid #80988b; background: #fff; color: #244b39; padding: 8px 12px; border-radius: 20px; cursor: pointer; }
+  .queue-filters button[aria-pressed="true"] { background: #244b39; color: #fff; border-color: #244b39; }
+  .queue-filters button:focus-visible, #queue-search:focus-visible { outline: 3px solid #b17e28; outline-offset: 3px; }
+  .queue-health { flex-basis: 100%; grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
+  .queue-warning { padding: 10px 12px; background: #fff4d9; color: #704900; border-left: 3px solid #b17e28; }
+  #pipeline-list .pipeline-row[hidden], #queue-no-match[hidden] { display: none !important; }
   .fourier-pipeline {
     max-width: 1080px;
     margin: 0 auto;
@@ -1310,6 +1425,32 @@ get_header();
     font-size: 11px
   }
 
+  .coverage-gap-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    cursor: pointer
+  }
+
+  .coverage-gap-choice input {
+    width: 16px;
+    height: 16px;
+    margin: 1px 0 0;
+    accent-color: #357054
+  }
+
+  .coverage-gap-choice span {
+    min-width: 0;
+    margin: 0
+  }
+
+  .coverage-gap-choice small {
+    display: block;
+    margin-top: 3px;
+    color: #7a8880;
+    font-size: 9px
+  }
+
   .coverage-meter {
     height: 7px;
     border-radius: 999px;
@@ -1322,6 +1463,141 @@ get_header();
     height: 100%;
     border-radius: inherit;
     background: linear-gradient(90deg, #75ad89, #357054)
+  }
+
+  .question-expansion {
+    margin-top: 11px;
+    padding: 12px;
+    border: 1px solid #dbe8df;
+    border-radius: 11px;
+    background: #f8fbf9
+  }
+
+  .question-expansion-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 10px
+  }
+
+  .question-expansion-controls label {
+    color: #607168;
+    font-size: 10px;
+    font-weight: 700
+  }
+
+  .question-expansion-controls select {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    margin-top: 5px;
+    padding: 9px 10px;
+    border: 1px solid #cfdcd3;
+    border-radius: 9px;
+    background: #fff
+  }
+
+  .question-expansion-start,
+  .question-expansion-apply {
+    min-height: 38px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 9px;
+    background: #286247;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer
+  }
+
+  .question-expansion-start:disabled,
+  .question-expansion-apply:disabled {
+    opacity: .55;
+    cursor: wait
+  }
+
+  .question-expansion-feedback {
+    min-height: 16px;
+    margin: 8px 0 0;
+    color: #607168;
+    font-size: 10px
+  }
+
+  .question-diff-preview {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #dfe8e2
+  }
+
+  .question-diff-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    color: #52695d;
+    font-size: 10px
+  }
+
+  .question-diff-item {
+    display: flex;
+    gap: 9px;
+    padding: 9px;
+    border: 1px solid #e0e9e3;
+    border-radius: 9px;
+    background: #fff;
+    cursor: pointer
+  }
+
+  .question-diff-item+.question-diff-item {
+    margin-top: 6px
+  }
+
+  .question-diff-item.is-duplicate {
+    background: #f3f4f3;
+    opacity: .72;
+    cursor: default
+  }
+
+  .question-diff-item input {
+    width: 16px;
+    height: 16px;
+    margin: 1px 0 0;
+    accent-color: #357054
+  }
+
+  .question-diff-item>span {
+    min-width: 0
+  }
+
+  .question-diff-item b,
+  .question-diff-item small,
+  .question-diff-item em {
+    display: block
+  }
+
+  .question-diff-item b {
+    color: #304a3c;
+    font-size: 11px;
+    line-height: 1.55
+  }
+
+  .question-diff-item small {
+    margin-top: 3px;
+    color: #65796d;
+    font-size: 9px
+  }
+
+  .question-diff-item em {
+    margin-top: 4px;
+    color: #8a746b;
+    font-size: 9px;
+    font-style: normal;
+    line-height: 1.45
+  }
+
+  .question-expansion-apply {
+    width: 100%;
+    margin-top: 10px
   }
 
   .training-provenance {
@@ -1371,6 +1647,23 @@ get_header();
 
     .training-value-body {
       padding: 13px
+    }
+
+    .question-expansion-controls {
+      grid-template-columns: 1fr
+    }
+
+    .question-expansion-start {
+      width: 100%
+    }
+
+    .question-diff-heading {
+      display: block
+    }
+
+    .question-diff-heading span {
+      display: block;
+      margin-top: 4px
     }
   }
 
@@ -2558,6 +2851,77 @@ get_header();
 <script>
   (() => {
     const root = document.querySelector('.fourier-pipeline');
+    const rows = Array.from(root.querySelectorAll('.pipeline-row'));
+    const button = document.querySelector('#queue-refresh');
+    const auto = document.querySelector('#queue-auto-refresh');
+    const feedback = document.querySelector('#queue-refresh-feedback');
+    const statuses = <?php echo wp_json_encode($queue_labels); ?>;
+    const stages = <?php echo wp_json_encode(array_map(static function ($labels) use ($pipeline_text) { return $pipeline_text(...$labels); }, $stage_labels)); ?>;
+    const labels = <?php echo wp_json_encode([
+      'loading' => $pipeline_text('状態を確認しています…', 'Checking status…', '正在检查状态…'),
+      'checked' => $pipeline_text('状態確認完了: ', 'Status checked: ', '状态检查完成：'),
+      'failed' => $pipeline_text('状態確認に失敗しました。表示は前回のままです。再試行してください。', 'Status check failed. Previous values remain; please retry.', '状态检查失败，保留上次显示，请重试。'),
+      'changed' => $pipeline_text('状態が変わったため操作を無効化しました。未保存の編集内容を手元に控えてから再読み込みしてください。自動保存はされません。', 'State changed; actions are disabled. Copy unsaved edits before reloading. Edits are not automatically saved.', '状态已变化，操作已禁用。请复制未保存的编辑后再重新加载，系统不会自动保存。'),
+      'missing' => $pipeline_text('取得できない項目があります。削除や権限変更の可能性があります。', 'Some records are unavailable; they may have been removed or access changed.', '部分记录无法获取，可能已删除或权限已变化。'),
+      'updated' => $pipeline_text('最終状態更新: ', 'Last status update: ', '最近状态更新：'),
+      'minutes' => $pipeline_text('分経過', 'min elapsed', '分钟已过'),
+      'warning' => $pipeline_text('5分以上未更新です。モデル・Cron・通信を確認してください。失敗とは断定できません。', 'No update for 5+ minutes. Check the model, Cron and network; failure is not confirmed.', '超过5分钟未更新，请检查模型、Cron和网络，尚不能判定失败。'),
+    ], JSON_UNESCAPED_UNICODE); ?>;
+    let busy = false;
+    async function refresh() {
+      if (busy) return;
+      busy = true; button.disabled = true; feedback.textContent = labels.loading;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const form = new FormData();
+        form.append('action', 'fourier_pipeline_queue_snapshot'); form.append('nonce', root.dataset.nonce);
+        rows.forEach(row => form.append('ids[]', row.dataset.id));
+        const response = await fetch(root.dataset.ajax, {method:'POST', body:form, signal:controller.signal});
+        const payload = await response.json();
+        if (!response.ok || !payload.success || !Array.isArray(payload.data.items)) throw new Error('Invalid response');
+        const items = new Map(payload.data.items.map(item => [String(item.id), item]));
+        rows.forEach(row => {
+          const item = items.get(row.dataset.id);
+          if (!item) { row.querySelectorAll('button').forEach(b => b.disabled = true); return; }
+          const state = row.querySelector('.pipeline-state');
+          const changed = row.dataset.status !== item.status || state.querySelector('span').textContent !== (stages[item.stage] || item.stage);
+          state.querySelector('span').textContent = stages[item.stage] || item.stage;
+          state.querySelector('span').className = 'state-' + item.status;
+          state.querySelector('small').textContent = statuses[item.status] || item.status;
+          row.dataset.status = item.status;
+          const health = row.querySelector('.queue-health');
+          health.querySelector('small').textContent = '#' + item.id + ' · ' + labels.updated + (item.updated || '—') + (item.age_minutes === null ? '' : ' · ' + item.age_minutes + ' ' + labels.minutes);
+          if (changed) {
+            health.querySelectorAll('p').forEach(p => p.remove());
+            const note = document.createElement('p'); note.textContent = labels.changed; health.append(note);
+            row.querySelectorAll('button').forEach(b => b.disabled = true);
+          }
+          let warning = health.querySelector('.queue-warning');
+          const stale = ['queued','processing'].includes(item.status) && item.age_minutes >= 5;
+          if (stale && !warning) { warning = document.createElement('p'); warning.className = 'queue-warning'; health.append(warning); }
+          if (warning) { warning.hidden = !stale; warning.textContent = labels.warning; }
+        });
+        feedback.textContent = labels.checked + payload.data.checked_at + (items.size < rows.length ? ' · ' + labels.missing : '');
+      } catch (error) { feedback.textContent = labels.failed; }
+      finally { clearTimeout(timeout); busy = false; button.disabled = false; }
+    }
+    button.addEventListener('click', refresh);
+    setInterval(() => { if (auto.checked && !document.hidden) refresh(); }, 30000);
+  })();
+  (() => {
+    let dirty = false;
+    document.querySelector('#pipeline-list').addEventListener('input', event => {
+      if (event.target.matches('input, textarea, select')) dirty = true;
+    });
+    window.addEventListener('beforeunload', event => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
+  })();
+  (() => {
+    const root = document.querySelector('.fourier-pipeline');
     if (!root) return;
     const ajax = root.dataset.ajax,
       nonce = root.dataset.nonce,
@@ -2994,6 +3358,102 @@ get_header();
         redistillTimer = setTimeout(pollRedistill, 800)
       }
     });
+  })();
+</script>
+<script>
+  (() => {
+    const root = document.querySelector('.fourier-pipeline');
+    if (!root) return;
+    const ajax = root.dataset.ajax,
+      nonce = root.dataset.nonce,
+      text = <?php echo wp_json_encode($js_text, JSON_UNESCAPED_UNICODE); ?>;
+    const post = (action, extra = {}) => {
+      const form = new FormData();
+      form.append('action', action);
+      form.append('nonce', nonce);
+      Object.entries(extra).forEach(([key, value]) => form.append(key, value));
+      return fetch(ajax, { method: 'POST', body: form }).then(response => response.json())
+    };
+    document.querySelectorAll('.question-expansion').forEach(panel => {
+      const row = panel.closest('.pipeline-row'),
+        start = panel.querySelector('.question-expansion-start'),
+        apply = panel.querySelector('.question-expansion-apply'),
+        provider = panel.querySelector('.question-expansion-provider'),
+        feedback = panel.querySelector('.question-expansion-feedback');
+      let pollTimer = null;
+      const setLocked = locked => {
+        if (start) start.disabled = locked;
+        if (provider) provider.disabled = locked;
+        row.querySelectorAll('.coverage-branch').forEach(input => input.disabled = locked)
+      };
+      const poll = () => post('fourier_concept_question_expansion_status', { post_id: row.dataset.id }).then(result => {
+        if (!result.success) throw new Error(result.data?.message || text.networkError);
+        const job = result.data?.job || {};
+        feedback.textContent = job.message || text.gapGenerating;
+        if (['preview', 'error'].includes(job.status)) {
+          clearTimeout(pollTimer);
+          if (job.status === 'preview') feedback.textContent = text.gapPreviewReady;
+          setTimeout(() => location.reload(), 500);
+          return
+        }
+        pollTimer = setTimeout(poll, 2000)
+      }).catch(() => {
+        feedback.textContent = text.networkError;
+        setLocked(false)
+      });
+      if (start) start.addEventListener('click', () => {
+        const branchIds = [...row.querySelectorAll('.coverage-branch:checked')].map(input => input.value);
+        if (!branchIds.length) {
+          feedback.textContent = text.gapSelectBranch;
+          return
+        }
+        setLocked(true);
+        feedback.textContent = text.gapGenerating;
+        post('fourier_concept_question_expansion_start', {
+          post_id: row.dataset.id,
+          branch_ids: branchIds.join(','),
+          provider: provider.value
+        }).then(result => {
+          if (!result.success) {
+            feedback.textContent = result.data?.message || text.startFailed;
+            setLocked(false);
+            return
+          }
+          pollTimer = setTimeout(poll, 1000)
+        }).catch(() => {
+          feedback.textContent = text.networkError;
+          setLocked(false)
+        })
+      });
+      if (apply) apply.addEventListener('click', () => {
+        const candidateIds = [...panel.querySelectorAll('.question-candidate:checked')].map(input => input.value);
+        if (!candidateIds.length) {
+          feedback.textContent = text.gapSelectCandidate;
+          return
+        }
+        apply.disabled = true;
+        feedback.textContent = text.gapApplying;
+        post('fourier_concept_question_expansion_apply', {
+          post_id: row.dataset.id,
+          candidate_ids: candidateIds.join(',')
+        }).then(result => {
+          if (!result.success) {
+            feedback.textContent = result.data?.message || text.saveFailed;
+            apply.disabled = false;
+            return
+          }
+          feedback.textContent = text.gapApplied;
+          setTimeout(() => location.reload(), 900)
+        }).catch(() => {
+          feedback.textContent = text.networkError;
+          apply.disabled = false
+        })
+      });
+      if (['queued', 'running'].includes(panel.dataset.status)) {
+        setLocked(true);
+        pollTimer = setTimeout(poll, 800)
+      }
+    })
   })();
 </script>
 <?php get_footer(); ?>

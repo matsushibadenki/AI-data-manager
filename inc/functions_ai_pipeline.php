@@ -994,7 +994,8 @@ add_action('wp_ajax_fourier_pipeline_retry', 'fourier_pipeline_ajax_retry');
 function fourier_pipeline_ajax_status() {
     check_ajax_referer('learning_data_action', 'nonce');
     $id = absint($_POST['post_id'] ?? 0);
-    if (!$id || !get_post($id)) wp_send_json_error(['message' => '対象がありません。']);
+    $post = get_post($id);
+    if (!$id || !$post || (int) $post->post_author !== get_current_user_id()) wp_send_json_error(['message' => '対象がありません。'], 404);
     wp_send_json_success(['stage' => get_post_meta($id, '_fourier_pipeline_stage', true), 'status' => get_post_meta($id, '_fourier_pipeline_status', true), 'message' => get_post_meta($id, '_fourier_pipeline_message', true), 'updated' => get_post_meta($id, '_fourier_pipeline_updated', true)]);
 }
 add_action('wp_ajax_fourier_pipeline_status', 'fourier_pipeline_ajax_status');
@@ -1593,6 +1594,22 @@ function fourier_concept_selective_redistill_start($id, $question_ids, $provider
     return $data['selective_redistillation'];
 }
 
+/** Replace existing answers and append answers for newly added questions. */
+function fourier_concept_merge_redistilled_answers($existing_items, $replacement) {
+    $items = is_array($existing_items) ? array_values($existing_items) : [];
+    $remaining = is_array($replacement) ? $replacement : [];
+    $previous = [];
+    foreach ($items as $index => $item) {
+        $question_id = sanitize_key($item['question_id'] ?? '');
+        if (!isset($remaining[$question_id])) continue;
+        $previous[] = $item;
+        $items[$index] = $remaining[$question_id];
+        unset($remaining[$question_id]);
+    }
+    foreach ($remaining as $item) $items[] = $item;
+    return ['items' => array_values($items), 'previous_items' => $previous];
+}
+
 function fourier_concept_selective_redistill_worker($id, $run_id) {
     $id = (int) $id;
     $data = get_post_meta($id, '_fourier_pipeline_data', true);
@@ -1611,7 +1628,11 @@ function fourier_concept_selective_redistill_worker($id, $run_id) {
         $concept = get_post_meta($id, '_fourier_pipeline_concept', true) ?: ($data['concept'] ?? '');
         $prompt = "概念『{$concept}』について、指定された質問だけ回答候補を再生成してください。各質問に独立した回答を3種類作り、短い直接回答、背景・理由を含む説明、具体例・比較・推論を含む応用回答にしてください。各itemはquestion_id、branch_id、answer_variants（style, answer, confidence, caveats）を持ちます。質問IDは変更せず、出力キーはitemsのみです。\n" . wp_json_encode(['questions' => $selected_questions], JSON_UNESCAPED_UNICODE);
         $mock = apply_filters('fourier_concept_selective_redistill_result', null, $job['provider'], $selected_questions, $id);
-        $generated = is_array($mock) ? $mock : fourier_pipeline_json(fourier_pipeline_llm($job['provider'], $prompt, $concept));
+        $source = fourier_concept_source_context($id, $data);
+        if (is_wp_error($source)) throw new Exception($source->get_error_message());
+        $llm_source = $concept;
+        if (!empty($source['text'])) $llm_source .= "\n\n根拠資料:\n" . $source['text'];
+        $generated = is_array($mock) ? $mock : fourier_pipeline_json(fourier_pipeline_llm($job['provider'], $prompt, $llm_source, (int) $post->post_author));
         $replacement = [];
         foreach (($generated['items'] ?? []) as $item) {
             $question_id = sanitize_key($item['question_id'] ?? '');
@@ -1619,13 +1640,9 @@ function fourier_concept_selective_redistill_worker($id, $run_id) {
             $replacement[$question_id] = $item;
         }
         if (count($replacement) !== count($job['question_ids'])) throw new Exception('選択したすべての質問について有効な回答を生成できませんでした。');
-        $old_items = [];
-        foreach (($data['branch_answers']['items'] ?? []) as $index => $item) {
-            $question_id = sanitize_key($item['question_id'] ?? '');
-            if (!isset($replacement[$question_id])) continue;
-            $old_items[] = $item;
-            $data['branch_answers']['items'][$index] = $replacement[$question_id];
-        }
+        $merged = fourier_concept_merge_redistilled_answers($data['branch_answers']['items'] ?? [], $replacement);
+        $data['branch_answers']['items'] = $merged['items'];
+        $old_items = $merged['previous_items'];
         $history = get_post_meta($id, '_fourier_concept_redistillation_history', true);
         $history = is_array($history) ? $history : [];
         $history[] = ['run_id' => $run_id, 'completed_at' => current_time('mysql'), 'provider' => $job['provider'], 'question_ids' => $job['question_ids'], 'previous_items' => $old_items];
@@ -1678,3 +1695,226 @@ function fourier_concept_selective_redistill_ajax_status() {
     wp_send_json_success(['job' => $data['selective_redistillation'] ?? []]);
 }
 add_action('wp_ajax_fourier_concept_selective_redistill_status', 'fourier_concept_selective_redistill_ajax_status');
+
+/** Normalize generated questions and calculate their closest existing-question diff. */
+function fourier_concept_build_question_expansion_preview($id, $run_id, $branch_ids, $generated) {
+    $data = get_post_meta((int) $id, '_fourier_pipeline_data', true);
+    $data = is_array($data) ? $data : [];
+    $allowed = array_fill_keys(array_map('sanitize_key', (array) $branch_ids), true);
+    $existing = is_array($data['branch_questions']['questions'] ?? null) ? $data['branch_questions']['questions'] : [];
+    $candidates = [];
+    foreach (($generated['questions'] ?? []) as $index => $question) {
+        $branch_id = sanitize_key($question['branch_id'] ?? '');
+        $text = sanitize_textarea_field($question['question'] ?? '');
+        if ($branch_id === '' || $text === '' || empty($allowed[$branch_id])) continue;
+        $closest = '';
+        $similarity = 0.0;
+        foreach ($existing as $known) {
+            $score = fourier_concept_semantic_similarity($text, $known['question'] ?? '');
+            if ($score > $similarity) {
+                $similarity = $score;
+                $closest = sanitize_textarea_field($known['question'] ?? '');
+            }
+        }
+        foreach ($candidates as $known) {
+            $score = fourier_concept_semantic_similarity($text, $known['question'] ?? '');
+            if ($score > $similarity) {
+                $similarity = $score;
+                $closest = $known['question'];
+            }
+        }
+        $fingerprint = substr(sha1($run_id . '|' . $branch_id . '|' . fourier_concept_normalize_text($text)), 0, 16);
+        $suggested_id = sanitize_key($question['question_id'] ?? '');
+        if ($suggested_id === '') $suggested_id = $branch_id . '-' . substr(sha1(fourier_concept_normalize_text($text)), 0, 10);
+        $points = is_array($question['expected_answer_points'] ?? null) ? $question['expected_answer_points'] : [];
+        $candidates[] = [
+            'candidate_id' => 'candidate-' . $fingerprint,
+            'question_id' => $suggested_id,
+            'branch_id' => $branch_id,
+            'question_type' => sanitize_key($question['question_type'] ?? 'knowledge_gap'),
+            'question' => $text,
+            'expected_answer_points' => array_slice(array_values(array_filter(array_map('sanitize_text_field', $points))), 0, 8),
+            'diff_status' => $similarity >= 0.82 ? 'duplicate' : 'new',
+            'closest_question' => $closest,
+            'similarity' => round($similarity, 3),
+            'generated_order' => (int) $index,
+        ];
+    }
+    return $candidates;
+}
+
+function fourier_concept_question_expansion_start($id, $branch_ids, $provider) {
+    $id = (int) $id;
+    $post = get_post($id);
+    if (!$post || get_post_meta($id, '_fourier_pipeline_kind', true) !== 'concept') return new WP_Error('invalid_concept', '概念蒸留データではありません。');
+    $data = get_post_meta($id, '_fourier_pipeline_data', true);
+    $data = is_array($data) ? $data : [];
+    if (in_array($data['question_expansion']['status'] ?? '', ['queued', 'running'], true)) return new WP_Error('already_running', '質問候補の生成はすでに実行中です。');
+    $active = [];
+    foreach (($data['concept_map']['branches'] ?? []) as $branch) {
+        $branch_id = sanitize_key($branch['id'] ?? '');
+        if ($branch_id !== '' && (!array_key_exists('enabled', $branch) || $branch['enabled'])) $active[$branch_id] = true;
+    }
+    $branch_ids = array_slice(array_values(array_unique(array_filter(array_map('sanitize_key', (array) $branch_ids), static function ($branch_id) use ($active) { return !empty($active[$branch_id]); }))), 0, 5);
+    if (!$branch_ids) return new WP_Error('missing_branches', '質問を追加する枝を1件以上選択してください。');
+    $provider = sanitize_key($provider);
+    $statuses = fourier_concept_multi_judge_provider_status((int) $post->post_author);
+    if (empty($statuses[$provider]['configured'])) return new WP_Error('provider_unavailable', '設定済みのLLMを選択してください。');
+    $run_id = wp_generate_uuid4();
+    $data['question_expansion'] = [
+        'schema_version' => '1.0', 'run_id' => $run_id, 'status' => 'queued',
+        'provider' => $provider, 'branch_ids' => $branch_ids, 'queued_at' => current_time('mysql'),
+        'message' => '追加質問候補の生成待ち', 'candidates' => [], 'error' => '',
+    ];
+    update_post_meta($id, '_fourier_pipeline_data', $data);
+    wp_schedule_single_event(time() + 1, 'fourier_concept_question_expansion_worker', [$id, $run_id]);
+    return $data['question_expansion'];
+}
+
+function fourier_concept_question_expansion_worker($id, $run_id) {
+    $id = (int) $id;
+    $post = get_post($id);
+    $data = get_post_meta($id, '_fourier_pipeline_data', true);
+    $data = is_array($data) ? $data : [];
+    $job = is_array($data['question_expansion'] ?? null) ? $data['question_expansion'] : [];
+    if (!$post || ($job['run_id'] ?? '') !== $run_id || !in_array($job['status'] ?? '', ['queued', 'running'], true)) return;
+    $job['status'] = 'running';
+    $job['started_at'] = current_time('mysql');
+    $job['message'] = '被覆不足を補う質問候補を生成中';
+    $data['question_expansion'] = $job;
+    update_post_meta($id, '_fourier_pipeline_data', $data);
+    try {
+        $branch_lookup = [];
+        foreach (($data['concept_map']['branches'] ?? []) as $branch) {
+            $branch_id = sanitize_key($branch['id'] ?? '');
+            if (in_array($branch_id, $job['branch_ids'], true)) $branch_lookup[] = $branch;
+        }
+        $existing = array_values(array_filter($data['branch_questions']['questions'] ?? [], static function ($question) use ($job) {
+            return in_array(sanitize_key($question['branch_id'] ?? ''), $job['branch_ids'], true);
+        }));
+        $concept = get_post_meta($id, '_fourier_pipeline_concept', true) ?: ($data['concept'] ?? '');
+        $prompt = "概念『{$concept}』の知識被覆が不足している指定枝について、既存質問と重ならない追加質問を各枝2〜3件作ってください。事実確認だけに偏らず、関係理解、比較、誤解訂正、推論・応用を優先してください。各要素はquestion_id、branch_id、question_type、question、expected_answer_pointsを持ち、出力キーはquestionsのみです。\n" . wp_json_encode(['branches' => $branch_lookup, 'existing_questions' => $existing], JSON_UNESCAPED_UNICODE);
+        $source = fourier_concept_source_context($id, $data);
+        if (is_wp_error($source)) throw new Exception($source->get_error_message());
+        $llm_source = $concept;
+        if (!empty($source['text'])) $llm_source .= "\n\n根拠資料:\n" . $source['text'];
+        $mock = apply_filters('fourier_concept_question_expansion_result', null, $job, $id);
+        $generated = is_array($mock) ? $mock : fourier_pipeline_json(fourier_pipeline_llm($job['provider'], $prompt, $llm_source, (int) $post->post_author));
+        $job['candidates'] = fourier_concept_build_question_expansion_preview($id, $run_id, $job['branch_ids'], $generated);
+        if (!$job['candidates']) throw new Exception('有効な追加質問候補を生成できませんでした。');
+        $job['status'] = 'preview';
+        $job['completed_at'] = current_time('mysql');
+        $job['new_count'] = count(array_filter($job['candidates'], static function ($candidate) { return $candidate['diff_status'] === 'new'; }));
+        $job['duplicate_count'] = count($job['candidates']) - $job['new_count'];
+        $job['message'] = sprintf('候補%d件（新規%d件・重複候補%d件）を生成しました。', count($job['candidates']), $job['new_count'], $job['duplicate_count']);
+    } catch (Throwable $error) {
+        $job['status'] = 'error';
+        $job['error'] = sanitize_text_field($error->getMessage());
+        $job['message'] = '追加質問候補の生成に失敗しました。';
+    }
+    $data = get_post_meta($id, '_fourier_pipeline_data', true);
+    $data = is_array($data) ? $data : [];
+    $data['question_expansion'] = $job;
+    update_post_meta($id, '_fourier_pipeline_data', $data);
+    update_post_meta($id, '_fourier_pipeline_message', $job['message']);
+    update_post_meta($id, '_fourier_pipeline_updated', current_time('mysql'));
+}
+add_action('fourier_concept_question_expansion_worker', 'fourier_concept_question_expansion_worker', 10, 2);
+
+function fourier_concept_apply_question_candidates($id, $candidate_ids, $user_id = 0, $generate_answers = true) {
+    $id = (int) $id;
+    $data = get_post_meta($id, '_fourier_pipeline_data', true);
+    $data = is_array($data) ? $data : [];
+    $job = is_array($data['question_expansion'] ?? null) ? $data['question_expansion'] : [];
+    if (($job['status'] ?? '') !== 'preview') return new WP_Error('missing_preview', '採用できる質問差分プレビューがありません。');
+    if ($generate_answers && in_array($data['selective_redistillation']['status'] ?? '', ['queued', 'running'], true)) return new WP_Error('redistillation_running', '回答の再蒸留が実行中です。完了後に質問を追加してください。');
+    if ($generate_answers) {
+        $post = get_post($id);
+        $statuses = fourier_concept_multi_judge_provider_status((int) ($post->post_author ?? 0));
+        if (empty($statuses[$job['provider'] ?? '']['configured'])) return new WP_Error('provider_unavailable', '質問生成に使用したLLMが現在未設定です。API設定を確認してください。');
+    }
+    $selected = array_fill_keys(array_map('sanitize_key', (array) $candidate_ids), true);
+    $known_ids = [];
+    foreach (($data['branch_questions']['questions'] ?? []) as $question) $known_ids[sanitize_key($question['question_id'] ?? '')] = true;
+    $added = [];
+    foreach (($job['candidates'] ?? []) as $candidate) {
+        $candidate_id = sanitize_key($candidate['candidate_id'] ?? '');
+        if (empty($selected[$candidate_id]) || ($candidate['diff_status'] ?? '') !== 'new') continue;
+        $question_id = sanitize_key($candidate['question_id'] ?? '');
+        if ($question_id === '' || isset($known_ids[$question_id])) $question_id = sanitize_key(($candidate['branch_id'] ?? 'question') . '-' . substr(sha1(($candidate['question'] ?? '') . '|' . $candidate_id), 0, 10));
+        $known_ids[$question_id] = true;
+        $added[] = [
+            'question_id' => $question_id,
+            'branch_id' => sanitize_key($candidate['branch_id'] ?? ''),
+            'question_type' => sanitize_key($candidate['question_type'] ?? 'knowledge_gap'),
+            'question' => sanitize_textarea_field($candidate['question'] ?? ''),
+            'expected_answer_points' => array_values(array_map('sanitize_text_field', $candidate['expected_answer_points'] ?? [])),
+            'origin' => 'coverage_gap_expansion',
+            'source_run_id' => $job['run_id'] ?? '',
+        ];
+    }
+    if (!$added) return new WP_Error('missing_candidates', '新規の質問候補を1件以上選択してください。');
+    if (!is_array($data['branch_questions']['questions'] ?? null)) $data['branch_questions']['questions'] = [];
+    $before_count = count($data['branch_questions']['questions']);
+    $data['branch_questions']['questions'] = array_merge($data['branch_questions']['questions'], $added);
+    $job['status'] = 'applied';
+    $job['applied_at'] = current_time('mysql');
+    $job['applied_by'] = (int) ($user_id ?: get_current_user_id());
+    $job['added_question_ids'] = array_column($added, 'question_id');
+    $job['message'] = sprintf('%d件の質問を追加しました。', count($added));
+    $data['question_expansion'] = $job;
+    $data['concept_graph']['distillation_refresh_required'] = true;
+    $data['concept_graph']['change_type'] = 'questions_added';
+    if (!empty($data['multi_judge'])) {
+        $data['multi_judge']['stale'] = true;
+        $data['multi_judge']['stale_reason'] = 'questions_added';
+        $data['multi_judge']['stale_at'] = current_time('mysql');
+    }
+    if (!empty($data['knowledge']['registered'])) {
+        $data['knowledge']['sync_required'] = true;
+        $data['knowledge']['sync_reason'] = 'questions_added';
+    }
+    update_post_meta($id, '_fourier_pipeline_data', $data);
+    $history = get_post_meta($id, '_fourier_concept_question_expansion_history', true);
+    $history = is_array($history) ? $history : [];
+    $history[] = ['run_id' => $job['run_id'] ?? '', 'applied_at' => $job['applied_at'], 'applied_by' => $job['applied_by'], 'before_count' => $before_count, 'added_questions' => $added];
+    update_post_meta($id, '_fourier_concept_question_expansion_history', array_slice($history, -20));
+    update_post_meta($id, '_fourier_pipeline_message', $job['message']);
+    update_post_meta($id, '_fourier_pipeline_updated', current_time('mysql'));
+    wp_update_post(['ID' => $id, 'post_content' => wp_slash(wp_json_encode(['format' => 'concept_distillation', 'data' => $data], JSON_UNESCAPED_UNICODE))]);
+    $redistillation = null;
+    if ($generate_answers) $redistillation = fourier_concept_selective_redistill_start($id, $job['added_question_ids'], $job['provider'] ?? '');
+    return ['added_count' => count($added), 'added_question_ids' => $job['added_question_ids'], 'redistillation' => $redistillation];
+}
+
+function fourier_concept_question_expansion_ajax_start() {
+    check_ajax_referer('learning_data_action', 'nonce');
+    $id = absint($_POST['post_id'] ?? 0);
+    if (!$id || !current_user_can('edit_post', $id)) wp_send_json_error(['message' => '権限がありません。'], 403);
+    $branch_ids = array_filter(explode(',', sanitize_text_field(wp_unslash($_POST['branch_ids'] ?? ''))));
+    $result = fourier_concept_question_expansion_start($id, $branch_ids, $_POST['provider'] ?? '');
+    if (is_wp_error($result)) wp_send_json_error(['message' => $result->get_error_message()], 400);
+    wp_send_json_success(['message' => '追加質問候補の生成を開始しました。', 'job' => $result]);
+}
+add_action('wp_ajax_fourier_concept_question_expansion_start', 'fourier_concept_question_expansion_ajax_start');
+
+function fourier_concept_question_expansion_ajax_status() {
+    check_ajax_referer('learning_data_action', 'nonce');
+    $id = absint($_POST['post_id'] ?? 0);
+    if (!$id || !current_user_can('edit_post', $id)) wp_send_json_error(['message' => '権限がありません。'], 403);
+    $data = get_post_meta($id, '_fourier_pipeline_data', true);
+    wp_send_json_success(['job' => $data['question_expansion'] ?? []]);
+}
+add_action('wp_ajax_fourier_concept_question_expansion_status', 'fourier_concept_question_expansion_ajax_status');
+
+function fourier_concept_question_expansion_ajax_apply() {
+    check_ajax_referer('learning_data_action', 'nonce');
+    $id = absint($_POST['post_id'] ?? 0);
+    if (!$id || !current_user_can('edit_post', $id)) wp_send_json_error(['message' => '権限がありません。'], 403);
+    $candidate_ids = array_filter(explode(',', sanitize_text_field(wp_unslash($_POST['candidate_ids'] ?? ''))));
+    $result = fourier_concept_apply_question_candidates($id, $candidate_ids, get_current_user_id(), true);
+    if (is_wp_error($result)) wp_send_json_error(['message' => $result->get_error_message()], 400);
+    if (is_wp_error($result['redistillation'] ?? null)) wp_send_json_error(['message' => $result['redistillation']->get_error_message()], 400);
+    wp_send_json_success(array_merge(['message' => '質問を追加し、回答生成を開始しました。'], $result));
+}
+add_action('wp_ajax_fourier_concept_question_expansion_apply', 'fourier_concept_question_expansion_ajax_apply');

@@ -62,6 +62,67 @@ if (($training_value['coverage_gaps'][0]['branch_id'] ?? '') !== 'reasoning') $f
 if (!isset($training_value['samples'][0]['information_gain'], $training_value['samples'][0]['training_eligibility'])) $failures[] = 'samples must expose information gain and training eligibility';
 if ((fourier_concept_difficulty('reasoning', 'もし条件が変わったならどうなりますか？')['level'] ?? 0) < 5) $failures[] = 'counterfactual questions must receive curriculum level 5 or higher';
 if ((new ReflectionFunction('llm_api_call_raw'))->getNumberOfParameters() !== 4) $failures[] = 'raw LLM calls must accept an explicit job owner ID';
+$merged_answers = fourier_concept_merge_redistilled_answers(
+    [['question_id' => 'existing-question', 'answer_variants' => [['answer' => 'old']]]],
+    [
+        'existing-question' => ['question_id' => 'existing-question', 'answer_variants' => [['answer' => 'new']]],
+        'added-question' => ['question_id' => 'added-question', 'answer_variants' => [['answer' => 'added']]],
+    ]
+);
+if (count($merged_answers['items'] ?? []) !== 2) $failures[] = 'selective redistillation must append answers for newly added questions';
+if (($merged_answers['items'][0]['answer_variants'][0]['answer'] ?? '') !== 'new') $failures[] = 'selective redistillation must replace existing answers';
+if (($merged_answers['items'][1]['question_id'] ?? '') !== 'added-question') $failures[] = 'new answer item must retain its question ID';
+if (count($merged_answers['previous_items'] ?? []) !== 1) $failures[] = 'only replaced answers must enter redistillation history';
+
+$expansion_test_id = wp_insert_post(['post_title' => 'Question expansion smoke test', 'post_status' => 'pending', 'post_type' => 'post', 'post_author' => 1]);
+if (!$expansion_test_id || is_wp_error($expansion_test_id)) {
+    $failures[] = 'temporary question expansion post could not be created';
+} else {
+    update_post_meta($expansion_test_id, '_fourier_pipeline_kind', 'concept');
+    update_post_meta($expansion_test_id, '_fourier_pipeline_concept', '料理');
+    update_post_meta($expansion_test_id, '_fourier_pipeline_provider', 'ollama');
+    update_post_meta($expansion_test_id, '_fourier_pipeline_data', [
+        'concept' => '料理',
+        'concept_map' => ['branches' => [[
+            'id' => 'history', 'label' => '歴史', 'scope' => '料理の歴史', 'priority' => 2,
+            'question_angles' => ['変遷'], 'enabled' => true,
+        ]]],
+        'branch_questions' => ['questions' => [[
+            'question_id' => 'history-1', 'branch_id' => 'history', 'question_type' => 'fact',
+            'question' => '料理の歴史はどのように変化しましたか？', 'expected_answer_points' => ['変化'],
+        ]]],
+        'branch_answers' => ['items' => []],
+        'knowledge' => ['registered' => true],
+    ]);
+    $preview = fourier_concept_build_question_expansion_preview($expansion_test_id, 'preview-run', ['history'], ['questions' => [
+        [
+            'question_id' => 'history-duplicate', 'branch_id' => 'history', 'question_type' => 'fact',
+            'question' => '料理の歴史はどのように変化しましたか？', 'expected_answer_points' => ['変化'],
+        ],
+        [
+            'question_id' => 'history-context', 'branch_id' => 'history', 'question_type' => 'comparison',
+            'question' => '地域交流は料理の発展にどのような影響を与えましたか？', 'expected_answer_points' => ['交易', '食材'],
+        ],
+    ]]);
+    if (($preview[0]['diff_status'] ?? '') !== 'duplicate') $failures[] = 'question expansion must flag an exact existing question as duplicate';
+    if (($preview[1]['diff_status'] ?? '') !== 'new') $failures[] = 'question expansion must preserve a novel question for review';
+    $expansion_data = get_post_meta($expansion_test_id, '_fourier_pipeline_data', true);
+    $expansion_data['question_expansion'] = [
+        'schema_version' => '1.0', 'run_id' => 'preview-run', 'status' => 'preview',
+        'provider' => 'ollama', 'branch_ids' => ['history'], 'candidates' => $preview,
+    ];
+    update_post_meta($expansion_test_id, '_fourier_pipeline_data', $expansion_data);
+    $apply_result = fourier_concept_apply_question_candidates($expansion_test_id, [$preview[1]['candidate_id']], 1, false);
+    $applied_data = get_post_meta($expansion_test_id, '_fourier_pipeline_data', true);
+    if (is_wp_error($apply_result) || ($apply_result['added_count'] ?? 0) !== 1) $failures[] = 'one selected novel question must be applied';
+    if (count($applied_data['branch_questions']['questions'] ?? []) !== 2) $failures[] = 'applied question must be appended to branch questions';
+    if (($applied_data['branch_questions']['questions'][1]['origin'] ?? '') !== 'coverage_gap_expansion') $failures[] = 'applied question must preserve its expansion origin';
+    if (empty($applied_data['knowledge']['sync_required'])) $failures[] = 'adding a question must mark registered knowledge for resync';
+    if (empty($applied_data['concept_graph']['distillation_refresh_required'])) $failures[] = 'adding a question must require downstream distillation';
+    $expansion_history = get_post_meta($expansion_test_id, '_fourier_concept_question_expansion_history', true);
+    if (!is_array($expansion_history) || count($expansion_history) !== 1) $failures[] = 'question expansion must retain an audit history';
+    wp_delete_post($expansion_test_id, true);
+}
 
 $source_test_id = wp_insert_post(['post_title' => 'Grounding source smoke test', 'post_status' => 'pending', 'post_type' => 'post']);
 $grounded_concept_id = wp_insert_post(['post_title' => 'Grounded concept smoke test', 'post_status' => 'pending', 'post_type' => 'post']);
