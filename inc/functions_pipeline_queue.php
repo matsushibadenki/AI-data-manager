@@ -11,7 +11,8 @@ function fourier_pipeline_queue_snapshot($ids, $user_id) {
         $date = $updated ? date_create_immutable($updated, wp_timezone()) : false;
         $result[] = ['id' => $id, 'status' => get_post_meta($id, '_fourier_pipeline_status', true),
             'stage' => get_post_meta($id, '_fourier_pipeline_stage', true), 'updated' => $updated,
-            'age_minutes' => $date ? (int) floor(max(0, time() - $date->getTimestamp()) / 60) : null];
+            'age_minutes' => $date ? (int) floor(max(0, time() - $date->getTimestamp()) / 60) : null,
+            'runtime' => fourier_pipeline_runtime_snapshot($id)];
     }
     return $result;
 }

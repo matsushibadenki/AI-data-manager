@@ -96,6 +96,7 @@ function fourier_mcp_call($name, $args) {
             $result['content'] = mb_substr($post->post_content, $offset, 12000);
             $result['next_offset'] = mb_strlen($post->post_content) > $offset + 12000 ? $offset + 12000 : null;
         }
+        if ($post->post_type === 'post') $result['runtime'] = fourier_pipeline_runtime_snapshot($post->ID);
         return $result;
     }
     if ($name === 'start_concept' && isset($args['source_post_id'])) {

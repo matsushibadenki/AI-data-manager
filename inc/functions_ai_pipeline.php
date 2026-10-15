@@ -105,7 +105,11 @@ function fourier_pipeline_fetch($url) {
 
 function fourier_pipeline_llm($provider, $instruction, $source, $user_id = 0) {
     $system = 'あなたはAI学習データの編集者です。入力にない事実を追加せず、日本語で正確に処理してください。必ずJSONオブジェクトだけを返してください。';
-    return llm_api_call_raw($provider, $system, $instruction . "\n\n対象本文:\n" . mb_substr($source, 0, 50000), $user_id);
+    $call = static function () use ($provider, $system, $instruction, $source, $user_id) {
+        return llm_api_call_raw($provider, $system, $instruction . "\n\n対象本文:\n" . mb_substr($source, 0, 50000), $user_id);
+    };
+    $job = $GLOBALS['fourier_pipeline_runtime_job'] ?? 0;
+    return $job ? fourier_pipeline_runtime_llm($job, $provider, $call) : $call();
 }
 
 /** Return extracted source text attached to a concept job, or its wait/error state. */
@@ -805,6 +809,10 @@ function fourier_concept_save_graph_branch($id, $input) {
 }
 
 function fourier_concept_pipeline_worker($id) {
+    fourier_pipeline_run_guarded($id, 'fourier_concept_pipeline_worker_impl');
+}
+
+function fourier_concept_pipeline_worker_impl($id) {
     $post = get_post((int) $id);
     if (!$post || get_post_meta($id, '_fourier_pipeline_status', true) === 'review') return;
     $data = get_post_meta($id, '_fourier_pipeline_data', true);
@@ -874,10 +882,14 @@ function fourier_concept_pipeline_worker($id) {
 }
 
 function fourier_pipeline_worker($id) {
+    fourier_pipeline_run_guarded($id, 'fourier_pipeline_worker_impl');
+}
+
+function fourier_pipeline_worker_impl($id) {
     $post = get_post((int) $id);
     if (!$post || get_post_meta($id, '_fourier_pipeline_status', true) === 'review') return;
     if (get_post_meta($id, '_fourier_pipeline_kind', true) === 'concept') {
-        fourier_concept_pipeline_worker($id);
+        fourier_concept_pipeline_worker_impl($id);
         return;
     }
     $data = get_post_meta($id, '_fourier_pipeline_data', true);

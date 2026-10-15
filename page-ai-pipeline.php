@@ -58,6 +58,16 @@ if ($queue_page > max(1, $queue_query->max_num_pages)) {
   $queue_query = fourier_pipeline_queue_query(get_current_user_id(), $queue_search, $queue_status, $queue_page);
 }
 $items = $queue_query->posts;
+$runtime_labels = [
+  'untracked' => $pipeline_text('計測なし', 'Not measured', '未测量'),
+  'worker' => $pipeline_text('工程処理中', 'Working', '阶段处理中'),
+  'llm_wait' => $pipeline_text('AI応答待ち', 'Waiting for AI', '等待AI响应'),
+  'finished' => $pipeline_text('工程完了', 'Stage finished', '阶段完成'),
+  'failed' => $pipeline_text('工程失敗', 'Stage failed', '阶段失败'),
+  'interrupted' => $pipeline_text('実行中断', 'Interrupted', '执行中断'),
+  'overdue' => $pipeline_text('実行期限超過', 'Execution overdue', '执行已超期'),
+];
+$runtime_help = $pipeline_text('新しい実行から通信時間を計測します。AI応答待ちはリクエスト送信を示し、モデルの生存確認ではありません。期限超過は停止の疑いを示します。再実行は自動で行いません。', 'New runs record call duration. Waiting means a request was sent, not a model heartbeat. An overdue run may have stopped; it is not automatically retried.', '从新任务开始记录通信时间。等待表示请求已发送，不代表模型心跳正常。超期可能表示执行停止，系统不会自动重试。');
 $queue_link = static function ($page) use ($queue_search, $queue_status) {
   return add_query_arg(['queue_search' => $queue_search, 'queue_status' => $queue_status, 'queue_page' => $page], get_permalink()) . '#pipeline-queue';
 };
@@ -174,7 +184,9 @@ get_header();
       <span><?php echo esc_html(sprintf($pipeline_text('該当 %d件', '%d matches', '共%d条匹配'), $queue_query->found_posts)); ?></span>
     </div>
     <div class="queue-toolbar">
-      <p><?php echo esc_html($pipeline_text('本人の全データから検索します。1ページ20件、更新日時の新しい順です。', 'Search all your records. 20 per page, most recently updated first.', '搜索本人的全部记录，每页20条，按更新时间倒序。')); ?></p>
+      <div class="queue-toolbar-caption"><span><?php echo esc_html($pipeline_text('全件検索 · 20件 / ページ', 'All records · 20 / page', '全部记录 · 每页20条')); ?></span>
+        <button type="button" class="queue-info" aria-label="<?php echo esc_attr($pipeline_text('検索について', 'About search', '关于搜索')); ?>">ⓘ<span role="tooltip"><?php echo esc_html($pipeline_text('本人の投稿を更新日時の新しい順に表示します。検索条件はページ移動後も保持します。', 'Your records are ordered by latest update. Filters remain active across pages.', '本人记录按更新时间倒序显示，翻页后保留筛选条件。')); ?></span></button>
+      </div>
       <form class="queue-browse-form" method="get" action="<?php echo esc_url(get_permalink()); ?>#pipeline-queue">
       <?php if (!get_option('permalink_structure')): ?><input type="hidden" name="page_id" value="<?php echo (int) get_queried_object_id(); ?>"><?php endif; ?>
       <label for="queue-search"><?php echo esc_html($pipeline_text('名称・出典を検索', 'Search title or source', '搜索名称或来源')); ?></label>
@@ -285,9 +297,16 @@ get_header();
             $age = $updated_date ? max(0, time() - $updated_date->getTimestamp()) : 0;
             ?>
             <small>#<?php echo (int) $item->ID; ?> · <?php echo esc_html($pipeline_text('最終状態更新: ', 'Last status update: ', '最近状态更新：') . ($updated ?: '—')); ?><?php if ($updated_date): ?> · <?php echo esc_html(sprintf($pipeline_text('%d分経過', '%d min elapsed', '已过%d分钟'), floor($age / 60))); ?><?php endif; ?></small>
+            <?php $runtime = fourier_pipeline_runtime_snapshot($item->ID); ?>
+            <div class="queue-runtime" data-runtime-state="<?php echo esc_attr($runtime['state']); ?>">
+              <span class="queue-runtime-stage"><?php echo isset($stage_labels[$runtime['stage'] ?? '']) ? esc_html($pipeline_text(...$stage_labels[$runtime['stage']])) : ''; ?></span>
+              <span class="queue-runtime-state"><?php echo esc_html($runtime_labels[$runtime['state']] ?? $runtime_labels['untracked']); ?></span>
+              <span class="queue-runtime-time"><?php echo isset($runtime['elapsed_seconds']) ? esc_html($runtime['elapsed_seconds'] . 's') : ''; ?></span>
+              <span class="queue-runtime-llm"><?php echo isset($runtime['llm_seconds']) ? esc_html('AI ' . $runtime['llm_seconds'] . 's') : ''; ?></span>
+              <button type="button" class="queue-info" aria-label="<?php echo esc_attr($pipeline_text('実行計測について', 'About runtime metrics', '关于执行测量')); ?>">ⓘ<span role="tooltip"><?php echo esc_html($runtime_help); ?></span></button>
+            </div>
             <?php if (in_array($status, ['queued', 'processing'], true)): ?>
-              <p><?php echo esc_html($status === 'queued' ? $pipeline_text('ワーカーの実行待ちです。登録完了は生成完了ではありません。', 'Waiting for a worker. Queued does not mean generated.', '正在等待执行器，注册成功不代表生成完成。') : $pipeline_text('ワーカーが工程を開始しました。AIの応答待ちを含みます。モデルの稼働を保証する表示ではありません。', 'The worker started this stage, including possible model wait time. This is not a model heartbeat.', '执行器已开始本阶段，可能正在等待模型响应。这不代表模型心跳正常。')); ?></p>
-              <?php if ($age >= 300): ?><p class="queue-warning"><?php echo esc_html($pipeline_text('5分以上、状態が更新されていません。失敗とは断定できません。モデルサーバー・Cron・通信の状態を確認し、重複した開始操作は避けてください。', 'No status update for 5+ minutes. This is not a confirmed failure. Check the model server, Cron and network before starting another job.', '超过5分钟未更新，尚不能判定失败。请检查模型服务器、Cron和网络，避免重复启动。')); ?></p><?php endif; ?>
+              <?php if ($age >= 300): ?><p class="queue-warning"><?php echo esc_html($pipeline_text('⚠ 長時間未更新', '⚠ No recent update', '⚠ 长时间未更新')); ?></p><?php endif; ?>
             <?php elseif ($status === 'review'): ?><p><?php echo esc_html($pipeline_text('生成結果を確認してから承認してください。承認すると公開されます。', 'Check the generated data before approval. Approval publishes it.', '请检查生成结果后再批准，批准将公开发布。')); ?></p><?php endif; ?>
           </div>
           <?php if ($status === 'review'): ?>
@@ -677,7 +696,15 @@ get_header();
 </main>
 
 <style>
-  .queue-toolbar { margin: 20px 0; padding: 18px; background: #f4f7f5; border-radius: 12px; }
+  .queue-toolbar { margin: 16px 0; padding: 14px; background: #f4f7f5; border-radius: 12px; }
+  .queue-toolbar-caption { position:relative; display:flex; align-items:center; gap:6px; font-size:12px; color:#50675b; margin-bottom:8px; }
+  .queue-browse-form { display:grid; grid-template-columns:minmax(0,1fr) 170px; column-gap:12px; }
+  .queue-browse-form label[for="queue-search"] { grid-column:1; grid-row:1; }
+  .queue-browse-form #queue-search { grid-column:1; grid-row:2; }
+  .queue-browse-form label[for="queue-status"] { grid-column:2; grid-row:1; }
+  .queue-browse-form #queue-status { grid-column:2; grid-row:2; }
+  .queue-browse-form > .queue-filters { grid-column:1/-1; align-items:center; }
+  @media(max-width:600px) { .queue-browse-form { grid-template-columns:minmax(0,1fr); } .queue-browse-form label[for="queue-status"] { grid-column:1; grid-row:3; } .queue-browse-form #queue-status { grid-column:1; grid-row:4; } }
   .queue-toolbar p, .queue-health p { font-size: 13px; line-height: 1.65; margin: 8px 0; }
   .queue-toolbar label { display: block; font-weight: 600; }
   #queue-search { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0 12px; border: 1px solid #80988b; border-radius: 8px; }
@@ -689,6 +716,13 @@ get_header();
   .queue-filters button[aria-pressed="true"] { background: #244b39; color: #fff; border-color: #244b39; }
   .queue-filters button:focus-visible, #queue-search:focus-visible { outline: 3px solid #b17e28; outline-offset: 3px; }
   .queue-health { flex-basis: 100%; grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
+  .queue-runtime { position:relative; display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; font-size:12px; }
+  .queue-runtime-state { padding:3px 8px; background:#edf2ef; border-radius:5px; }
+  .queue-runtime[data-runtime-state="llm_wait"] .queue-runtime-state { background:#e4edf8; color:#244b79; }
+  .queue-runtime[data-runtime-state="overdue"] .queue-runtime-state, .queue-runtime[data-runtime-state="failed"] .queue-runtime-state { background:#fff0db; color:#784b10; }
+  .queue-info { border:0; background:transparent; color:#456653; padding:4px 8px; cursor:help; font-size:16px; }
+  .queue-info [role="tooltip"] { display:none; box-sizing:border-box; position:absolute; bottom:100%; left:0; width:264px; max-width:100%; padding:12px; border-radius:8px; background:#203b2e; color:#fff; font-size:12px; font-weight:400; line-height:1.6; z-index:20; text-align:left; }
+  .queue-info:hover [role="tooltip"], .queue-info:focus [role="tooltip"] { display:block; }
   .queue-warning { padding: 10px 12px; background: #fff4d9; color: #704900; border-left: 3px solid #b17e28; }
   #pipeline-list .pipeline-row[hidden], #queue-no-match[hidden] { display: none !important; }
   .fourier-pipeline {
@@ -2856,6 +2890,7 @@ get_header();
     const auto = document.querySelector('#queue-auto-refresh');
     const feedback = document.querySelector('#queue-refresh-feedback');
     const statuses = <?php echo wp_json_encode($queue_labels); ?>;
+    const runtimeLabels = <?php echo wp_json_encode($runtime_labels); ?>;
     const stages = <?php echo wp_json_encode(array_map(static function ($labels) use ($pipeline_text) { return $pipeline_text(...$labels); }, $stage_labels)); ?>;
     const labels = <?php echo wp_json_encode([
       'loading' => $pipeline_text('状態を確認しています…', 'Checking status…', '正在检查状态…'),
@@ -2865,7 +2900,7 @@ get_header();
       'missing' => $pipeline_text('取得できない項目があります。削除や権限変更の可能性があります。', 'Some records are unavailable; they may have been removed or access changed.', '部分记录无法获取，可能已删除或权限已变化。'),
       'updated' => $pipeline_text('最終状態更新: ', 'Last status update: ', '最近状态更新：'),
       'minutes' => $pipeline_text('分経過', 'min elapsed', '分钟已过'),
-      'warning' => $pipeline_text('5分以上未更新です。モデル・Cron・通信を確認してください。失敗とは断定できません。', 'No update for 5+ minutes. Check the model, Cron and network; failure is not confirmed.', '超过5分钟未更新，请检查模型、Cron和网络，尚不能判定失败。'),
+      'warning' => $pipeline_text('⚠ 長時間未更新', '⚠ No recent update', '⚠ 长时间未更新'),
     ], JSON_UNESCAPED_UNICODE); ?>;
     let busy = false;
     async function refresh() {
@@ -2883,7 +2918,7 @@ get_header();
         const items = new Map(payload.data.items.map(item => [String(item.id), item]));
         rows.forEach(row => {
           const item = items.get(row.dataset.id);
-          if (!item) { row.querySelectorAll('button').forEach(b => b.disabled = true); return; }
+          if (!item) { row.querySelectorAll('button:not(.queue-info)').forEach(b => b.disabled = true); return; }
           const state = row.querySelector('.pipeline-state');
           const changed = row.dataset.status !== item.status || state.querySelector('span').textContent !== (stages[item.stage] || item.stage);
           state.querySelector('span').textContent = stages[item.stage] || item.stage;
@@ -2891,11 +2926,18 @@ get_header();
           state.querySelector('small').textContent = statuses[item.status] || item.status;
           row.dataset.status = item.status;
           const health = row.querySelector('.queue-health');
+          const metrics = health.querySelector('.queue-runtime');
+          const runtime = item.runtime || {state:'untracked'};
+          metrics.dataset.runtimeState = runtime.state;
+          metrics.querySelector('.queue-runtime-stage').textContent = stages[runtime.stage] || '';
+          metrics.querySelector('.queue-runtime-state').textContent = runtimeLabels[runtime.state] || runtimeLabels.untracked;
+          metrics.querySelector('.queue-runtime-time').textContent = runtime.elapsed_seconds == null ? '' : runtime.elapsed_seconds + 's';
+          metrics.querySelector('.queue-runtime-llm').textContent = runtime.llm_seconds == null ? '' : 'AI ' + runtime.llm_seconds + 's';
           health.querySelector('small').textContent = '#' + item.id + ' · ' + labels.updated + (item.updated || '—') + (item.age_minutes === null ? '' : ' · ' + item.age_minutes + ' ' + labels.minutes);
           if (changed) {
             health.querySelectorAll('p').forEach(p => p.remove());
             const note = document.createElement('p'); note.textContent = labels.changed; health.append(note);
-            row.querySelectorAll('button').forEach(b => b.disabled = true);
+            row.querySelectorAll('button:not(.queue-info)').forEach(b => b.disabled = true);
           }
           let warning = health.querySelector('.queue-warning');
           const stale = ['queued','processing'].includes(item.status) && item.age_minutes >= 5;

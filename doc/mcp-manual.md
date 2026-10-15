@@ -28,7 +28,7 @@ env_http_headers = { Authorization = "AI_DATA_MANAGER_AUTH" }
 | --- | --- |
 | search | 本人の投稿・ジョブを検索。1ページ20件、pageでページ送り |
 | get_data | 本文を12,000文字ずつ取得。next_offsetで続きを取得 |
-| job_status | 状態・工程・次のCron予定を取得。ワーカーを起動しない |
+| job_status | 状態・工程・次のCron予定と、URL／概念パイプラインの実行計測runtimeを取得。ワーカーを起動しない |
 | start_url | URL処理をキューへ登録。url、providerを指定 |
 | start_concept | 概念蒸留を登録。concept、provider、任意でsource_post_id |
 | stop_auto | 連続蒸留を停止。実行中のLLM通信は完了する場合あり |
@@ -55,8 +55,9 @@ Connect to `/wp-json/fourier/v1/mcp` over trusted HTTPS using a dedicated WordPr
 
 ## Roadmap
 
-- [Done] Authenticated owner-scoped MCP transport, search/read/status, permission-gated start/stop tools enabled by default, unit tests and connection guide.
-- [Next] Live Codex authentication and tool-call integration verification; dedicated per-connection scopes and rate limiting.
-- [Later] OAuth discovery, concept coverage tools, reusable Codex plugin packaging.
+- 🟢 [Done] Authenticated owner-scoped MCP transport, search/read/status, permission-gated start/stop tools enabled by default, unit tests and connection guide.
+- 🟠 [Next] Dedicated per-connection scopes and rate limiting.
+- ⭕️ [Pending] Live Codex authentication and tool-call integration verification with configured client credentials.
+- 🔴 [Later] OAuth discovery, concept coverage tools, reusable Codex plugin packaging.
 
 References: [MCP transport specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports), [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli).

@@ -32,6 +32,7 @@ require_once get_template_directory() . '/inc/functions_llm_api.php';
 require_once get_template_directory() . '/inc/functions_rest_api.php';
 require_once get_template_directory() . '/inc/functions_mcp.php';
 require_once get_template_directory() . '/inc/functions_pipeline_queue.php';
+require_once get_template_directory() . '/inc/functions_pipeline_runtime.php';
 require_once get_template_directory() . '/inc/functions_sara_event_memory.php';
 
 /* ----------------------- 重複メディア管理の設定 ---------------------- */
